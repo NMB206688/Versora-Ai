@@ -89,16 +89,6 @@ export function LoginForm() {
         )}
         
         <LoginButton />
-
-        <div className="text-center text-sm text-muted-foreground">
-            <p>Hint: Use one of the following emails:</p>
-            <ul className="list-disc list-inside">
-                <li>student@versora.ai</li>
-                <li>instructor@versora.ai</li>
-                <li>admin@versora.ai</li>
-            </ul>
-            <p>(any password will work)</p>
-        </div>
       </form>
     </Form>
   );
