@@ -25,11 +25,10 @@ export async function authenticate(
     redirect(`/${user.role}/dashboard`);
 
   } catch (error) {
-    if ((error as Error).message.includes('credential')) {
-      return {
-        message: 'Invalid credentials.',
-      };
+    if (error instanceof Error && error.message.includes('NEXT_REDIRECT')) {
+      throw error;
     }
+    
     return {
       message: 'Something went wrong.',
     };
