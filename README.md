@@ -1,7 +1,3 @@
-# Firebase Studio
-
-This is a NextJS starter in Firebase Studio.
-
 ## Running the Project Locally
 
 To run this project in your own development environment (like VS Code), follow these steps from your terminal:
