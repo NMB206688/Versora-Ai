@@ -12,12 +12,13 @@ export async function authenticate(
 ) {
   try {
     const email = formData.get('email') as string;
+    const password = formData.get('password') as string;
     
     const user = users.find(u => u.email === email);
 
-    if (!user) {
+    if (!user || user.password !== password) {
       return {
-        message: 'Invalid credentials. User not found.',
+        message: 'Invalid credentials.',
       };
     }
     

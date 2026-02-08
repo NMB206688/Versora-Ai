@@ -8,9 +8,10 @@ const courseImage4 = PlaceHolderImages.find(img => img.id === 'course-4');
 const userAvatar = PlaceHolderImages.find(img => img.id === 'user-avatar-1');
 
 export const users: User[] = [
-  { id: '1', name: 'Alex Johnson', email: 'student@versora.ai', role: 'student', avatarUrl: userAvatar?.imageUrl || '' },
-  { id: '2', name: 'Dr. Emily Carter', email: 'instructor@versora.ai', role: 'instructor', avatarUrl: userAvatar?.imageUrl || '' },
-  { id: '3', name: 'Admin User', email: 'admin@versora.ai', role: 'admin', avatarUrl: userAvatar?.imageUrl || '' },
+  { id: '1', name: 'Alex Johnson', email: 'student@versora.ai', role: 'student', password: 'password123', avatarUrl: userAvatar?.imageUrl || '' },
+  { id: '2', name: 'Dr. Emily Carter', email: 'instructor@versora.ai', role: 'instructor', password: 'password123', avatarUrl: userAvatar?.imageUrl || '' },
+  { id: '3', name: 'Admin User', email: 'admin@versora.ai', role: 'admin', password: 'password123', avatarUrl: userAvatar?.imageUrl || '' },
+  { id: '4', name: 'Student1', email: 'student1@gmail.com', role: 'student', password: '12345', avatarUrl: userAvatar?.imageUrl || '' },
 ];
 
 export const courses: Course[] = [
