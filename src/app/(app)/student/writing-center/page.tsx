@@ -1,6 +1,7 @@
 'use client';
 
-import { useFormState, useFormStatus } from 'react-dom';
+import { useFormStatus } from 'react-dom';
+import { useActionState } from 'react';
 import { getWritingFeedback } from '@/lib/actions';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -25,7 +26,7 @@ function SubmitButton() {
 }
 
 export default function WritingCenterPage() {
-  const [state, dispatch] = useFormState(getWritingFeedback, initialState);
+  const [state, dispatch] = useActionState(getWritingFeedback, initialState);
   const form = useForm(); // For displaying form-level errors
 
   return (

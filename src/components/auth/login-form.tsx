@@ -3,7 +3,8 @@
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
-import { useFormState, useFormStatus } from "react-dom";
+import { useFormStatus } from "react-dom";
+import { useActionState } from "react";
 import { authenticate } from "@/lib/actions";
 
 import { Button } from "@/components/ui/button";
@@ -34,7 +35,7 @@ function LoginButton() {
 }
 
 export function LoginForm() {
-  const [state, action] = useFormState(authenticate, undefined);
+  const [state, action] = useActionState(authenticate, undefined);
 
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
