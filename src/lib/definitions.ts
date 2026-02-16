@@ -88,8 +88,11 @@ export interface Submission {
   id: string;
   assignmentId: string;
   studentId: string;
+  studentName: string;
   submissionDate: string;
   contentUrl?: string;
   textContent?: string;
   grade?: number;
 }
+
+    

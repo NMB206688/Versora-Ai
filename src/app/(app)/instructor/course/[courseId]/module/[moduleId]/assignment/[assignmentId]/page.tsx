@@ -17,7 +17,7 @@ import { useFirestore, useDoc, useCollection, useMemoFirebase, useUser } from '@
 import { doc, collection, query, orderBy } from 'firebase/firestore';
 import { updateAssignment, generateRubricForAssignment, saveRubric } from '@/lib/actions';
 import { useToast } from '@/hooks/use-toast';
-import { ArrowLeft, ClipboardEdit, Sparkles, AlertCircle } from 'lucide-react';
+import { ArrowLeft, ClipboardEdit, Sparkles, AlertCircle, Eye } from 'lucide-react';
 import { format } from 'date-fns';
 import {
   Dialog,
@@ -29,8 +29,10 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 import type { GenerateGradingRubricOutput } from '@/ai/flows/generate-grading-rubric';
-import type { Rubric, RubricCriterion } from '@/lib/definitions';
+import type { Rubric, RubricCriterion, Submission } from '@/lib/definitions';
 import { Alert, AlertDescription } from '@/components/ui/alert';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { Badge } from '@/components/ui/badge';
 
 const AssignmentEditSchema = z.object({
   title: z.string().min(1, 'Title is required'),
@@ -279,6 +281,65 @@ function RubricSection({ courseId, moduleId, assignmentId, assignment }: { cours
     );
 }
 
+function SubmissionsList({ courseId, moduleId, assignmentId }: { courseId: string; moduleId: string; assignmentId: string; }) {
+  const firestore = useFirestore();
+
+  const submissionsQuery = useMemoFirebase(() => {
+    if (!firestore) return null;
+    return query(collection(firestore, `courses/${courseId}/modules/${moduleId}/assignments/${assignmentId}/submissions`), orderBy('submissionDate', 'desc'));
+  }, [firestore, courseId, moduleId, assignmentId]);
+
+  const { data: submissions, isLoading } = useCollection<Submission>(submissionsQuery);
+
+  return (
+    <Card className="shadow-lg">
+      <CardHeader>
+        <CardTitle className="font-headline text-2xl">Student Submissions</CardTitle>
+        <CardDescription>Review and grade work submitted by students for this assignment.</CardDescription>
+      </CardHeader>
+      <CardContent>
+        {isLoading ? (
+          <Skeleton className="h-40 w-full" />
+        ) : submissions && submissions.length > 0 ? (
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Student</TableHead>
+                <TableHead>Submitted On</TableHead>
+                <TableHead>Status</TableHead>
+                <TableHead className="text-right">Actions</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {submissions.map((submission) => (
+                <TableRow key={submission.id}>
+                  <TableCell className="font-medium">{submission.studentName}</TableCell>
+                  <TableCell>{format(new Date(submission.submissionDate), 'PPp')}</TableCell>
+                  <TableCell>
+                    <Badge variant={submission.grade ? "secondary" : "default"} className={submission.grade ? '' : 'bg-green-600 hover:bg-green-700'}>
+                      {submission.grade ? `Graded (${submission.grade})` : 'Needs Grading'}
+                    </Badge>
+                  </TableCell>
+                  <TableCell className="text-right">
+                    <Button variant="outline" size="sm">
+                      <Eye className="mr-2 h-3 w-3" />
+                      View & Grade
+                    </Button>
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        ) : (
+          <div className="text-center text-muted-foreground py-8">
+            <p>No submissions have been made for this assignment yet.</p>
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
 
 export default function AssignmentEditPage({ params }: { params: { courseId: string, moduleId: string, assignmentId: string } }) {
   const { toast } = useToast();
@@ -366,7 +427,7 @@ export default function AssignmentEditPage({ params }: { params: { courseId: str
       </header>
 
       <div className="grid gap-8 lg:grid-cols-3">
-        <div className="lg:col-span-2">
+        <div className="lg:col-span-2 space-y-8">
             <Card className="shadow-lg">
               <CardHeader>
                 <CardTitle className="font-headline text-2xl">Assignment Details</CardTitle>
@@ -445,6 +506,11 @@ export default function AssignmentEditPage({ params }: { params: { courseId: str
                 )}
               </CardContent>
             </Card>
+            <SubmissionsList
+                courseId={params.courseId}
+                moduleId={params.moduleId}
+                assignmentId={params.assignmentId}
+            />
         </div>
         <div className="lg:col-span-1">
              <RubricSection
@@ -458,3 +524,5 @@ export default function AssignmentEditPage({ params }: { params: { courseId: str
     </div>
   );
 }
+
+    

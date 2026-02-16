@@ -96,7 +96,7 @@ function SubmitButton() {
 
 export default function StudentAssignmentPage({ params }: { params: { courseId: string, moduleId: string, assignmentId: string } }) {
     const firestore = useFirestore();
-    const { user } = useUser();
+    const { user, profile } = useUser();
     const { toast } = useToast();
 
     const assignmentRef = useMemoFirebase(() => {
@@ -118,8 +118,10 @@ export default function StudentAssignmentPage({ params }: { params: { courseId: 
     const { data: submissions, isLoading: isSubmissionLoading } = useCollection<Submission>(submissionQuery);
     const submission = submissions?.[0];
 
+    const studentName = profile ? `${profile.firstName} ${profile.lastName}`.trim() : user?.email || 'Anonymous';
+
     const [state, formAction] = useActionState(
-        submitAssignment.bind(null, params.courseId, params.moduleId, params.assignmentId, user?.uid ?? ''),
+        submitAssignment.bind(null, params.courseId, params.moduleId, params.assignmentId, user?.uid ?? '', studentName),
         { success: false, message: '' }
     );
     
@@ -252,3 +254,5 @@ export default function StudentAssignmentPage({ params }: { params: { courseId: 
         </div>
     );
 }
+
+    
