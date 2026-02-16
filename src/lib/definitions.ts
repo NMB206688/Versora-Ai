@@ -47,8 +47,13 @@ export interface Module {
   order: number;
 }
 
-export interface Lesson {
+export interface ContentItem {
   id: string;
+  moduleId: string;
   title: string;
-  type: 'video' | 'reading' | 'quiz';
+  description: string;
+  type: 'video' | 'reading' | 'quiz' | 'link' | 'document';
+  contentUrl?: string;
+  textContent?: string;
+  order: number;
 }

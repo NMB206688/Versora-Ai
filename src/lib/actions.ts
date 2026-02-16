@@ -16,6 +16,7 @@ import { initializeApp, getApps, getApp, type FirebaseApp } from 'firebase/app';
 import { firebaseConfig } from '@/firebase/config';
 import { PlaceHolderImages } from './placeholder-images';
 import { revalidatePath } from 'next/cache';
+import type { ContentItem } from './definitions';
 
 // Server-side Firebase initialization for both Auth and Firestore.
 function getFirebaseServerServices() {
@@ -362,5 +363,36 @@ export async function createModule(courseId: string) {
   } catch (error) {
     console.error("Failed to create module:", error);
     return { error: "An unexpected error occurred while creating the module." };
+  }
+}
+
+export async function createContentItem(courseId: string, moduleId: string, type: ContentItem['type']) {
+  if (!courseId || !moduleId || !type) {
+    return { error: "Course ID, Module ID, and item type are required." };
+  }
+
+  const { firestore } = getFirebaseServerServices();
+  const contentItemsRef = collection(firestore, `courses/${courseId}/modules/${moduleId}/contentItems`);
+
+  try {
+    // Find the current highest order number
+    const q = query(contentItemsRef, orderBy("order", "desc"), limit(1));
+    const querySnapshot = await getDocs(q);
+    const lastOrder = querySnapshot.empty ? 0 : querySnapshot.docs[0].data().order;
+    
+    // Add the new content item with the next order number
+    await addDoc(contentItemsRef, {
+      moduleId: moduleId,
+      title: `New ${type.charAt(0).toUpperCase() + type.slice(1)}`,
+      description: "",
+      type: type,
+      order: lastOrder + 1,
+    });
+    
+    revalidatePath(`/instructor/course/${courseId}/edit`);
+    return { success: true };
+  } catch (error) {
+    console.error("Failed to create content item:", error);
+    return { error: "An unexpected error occurred while creating the content item." };
   }
 }

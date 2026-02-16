@@ -25,10 +25,16 @@ import { Form, FormControl, FormField, FormItem, FormMessage } from '@/component
 import { Skeleton } from '@/components/ui/skeleton';
 import { useFirestore, useDoc, useCollection, useMemoFirebase } from '@/firebase';
 import { doc, collection, query, orderBy } from 'firebase/firestore';
-import { BookOpen, GripVertical, PlaySquare, FileText, CheckSquare, PlusCircle } from 'lucide-react';
-import { updateCourse, createModule } from '@/lib/actions';
+import { BookOpen, GripVertical, PlaySquare, FileText, CheckSquare, PlusCircle, Link as LinkIcon } from 'lucide-react';
+import { updateCourse, createModule, createContentItem } from '@/lib/actions';
 import { useToast } from '@/hooks/use-toast';
-import type { Module } from '@/lib/definitions';
+import type { Module, ContentItem } from '@/lib/definitions';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 
 const CourseEditSchema = z.object({
   title: z.string().min(1, 'Title is required'),
@@ -70,6 +76,91 @@ function CreateModuleButton({ courseId }: { courseId: string }) {
     <Button variant="ghost" size="icon" onClick={handleCreateModule} disabled={isPending}>
       <PlusCircle className="h-4 w-4" />
     </Button>
+  );
+}
+
+function ContentItemsList({ courseId, moduleId }: { courseId: string; moduleId: string }) {
+  const firestore = useFirestore();
+  const [isPending, startTransition] = useTransition();
+  const { toast } = useToast();
+
+  const contentItemsQuery = useMemoFirebase(() => {
+    if (!firestore) return null;
+    return query(collection(firestore, `courses/${courseId}/modules/${moduleId}/contentItems`), orderBy('order'));
+  }, [firestore, courseId, moduleId]);
+
+  const { data: contentItems, isLoading } = useCollection<ContentItem>(contentItemsQuery);
+
+  const handleCreateContentItem = (type: ContentItem['type']) => {
+    startTransition(async () => {
+      const result = await createContentItem(courseId, moduleId, type);
+      if (result?.error) {
+        toast({
+          variant: "destructive",
+          title: "Error",
+          description: result.error,
+        });
+      } else {
+        toast({
+          title: "Success",
+          description: `New ${type} created.`,
+        });
+      }
+    });
+  };
+
+  const itemIcons = {
+    video: <PlaySquare className="h-4 w-4" />,
+    reading: <FileText className="h-4 w-4" />,
+    document: <FileText className="h-4 w-4" />,
+    quiz: <CheckSquare className="h-4 w-4" />,
+    link: <LinkIcon className="h-4 w-4" />,
+  };
+
+  return (
+    <ul className="pl-8 space-y-1 py-1 border-l border-dashed ml-4">
+      {isLoading && (
+        <div className="space-y-2 py-1">
+          <Skeleton className="h-7 w-full" />
+          <Skeleton className="h-7 w-full" />
+        </div>
+      )}
+      {contentItems?.map((item) => (
+        <li key={item.id} className="w-full">
+          <a
+            href="#"
+            className="flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground p-2 rounded-md"
+          >
+            {itemIcons[item.type] || <FileText className="h-4 w-4" />}
+            <span>{item.title}</span>
+          </a>
+        </li>
+      ))}
+       <li className="w-full mt-2">
+         <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+                <Button variant="ghost" size="sm" className="w-full justify-start text-muted-foreground" disabled={isPending}>
+                  <PlusCircle className="h-4 w-4 mr-2" />
+                  Add Content Item
+                </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent>
+                <DropdownMenuItem onClick={() => handleCreateContentItem('reading')}>
+                    <FileText className="mr-2 h-4 w-4" /> Reading
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => handleCreateContentItem('video')}>
+                    <PlaySquare className="mr-2 h-4 w-4" /> Video
+                </DropdownMenuItem>
+                 <DropdownMenuItem onClick={() => handleCreateContentItem('quiz')}>
+                    <CheckSquare className="mr-2 h-4 w-4" /> Quiz
+                </DropdownMenuItem>
+                 <DropdownMenuItem onClick={() => handleCreateContentItem('link')}>
+                    <LinkIcon className="mr-2 h-4 w-4" /> Link
+                </DropdownMenuItem>
+            </DropdownMenuContent>
+         </DropdownMenu>
+      </li>
+    </ul>
   );
 }
 
@@ -159,22 +250,7 @@ export default function CourseEditPage({ params }: { params: { id: string } }) {
                       <span>{module.title}</span>
                     </SidebarMenuButton>
                   </div>
-                  {/* Lesson list will be dynamic in a future step */}
-                  <ul className="pl-8 space-y-1 py-1 border-l border-dashed ml-4">
-                    {/* {module.lessons.map((lesson) => (
-                      <li key={lesson.id} className="w-full">
-                        <a
-                          href="#"
-                          className="flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground p-2 rounded-md"
-                        >
-                          {lesson.type === 'video' && <PlaySquare className="h-4 w-4" />}
-                          {lesson.type === 'reading' && <FileText className="h-4 w-4" />}
-                          {lesson.type === 'quiz' && <CheckSquare className="h-4 w-4" />}
-                          <span>{lesson.title}</span>
-                        </a>
-                      </li>
-                    ))} */}
-                  </ul>
+                  <ContentItemsList courseId={params.id} moduleId={module.id} />
                 </SidebarMenuItem>
               ))}
                {!areModulesLoading && modules && modules.length === 0 && (
