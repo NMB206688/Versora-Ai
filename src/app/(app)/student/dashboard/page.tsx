@@ -95,7 +95,7 @@ export default function StudentDashboard() {
               </CardContent>
               <CardFooter>
                 <Button asChild className="w-full bg-accent hover:bg-accent/90 text-accent-foreground">
-                  <Link href="#">
+                  <Link href={`/student/course/${continueLearningCourse.id}`}>
                     Jump Back In <ArrowRight className="ml-2 h-4 w-4" />
                   </Link>
                 </Button>
@@ -210,7 +210,9 @@ export default function StudentDashboard() {
                     <p className="text-xs text-muted-foreground">30% complete</p>
                 </CardContent>
                 <CardFooter className="p-4 pt-0">
-                    <Button variant="outline" className="w-full">Go to Course</Button>
+                    <Button variant="outline" className="w-full" asChild>
+                        <Link href={`/student/course/${course.id}`}>Go to Course</Link>
+                    </Button>
                 </CardFooter>
                 </Card>
             ))}
