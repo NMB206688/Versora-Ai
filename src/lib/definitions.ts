@@ -62,3 +62,24 @@ export interface Enrollment {
     enrollmentDate: string;
     completionDate?: string;
 }
+
+export interface Rubric {
+  id: string;
+  assignmentId: string;
+  instructorId: string;
+  creationDate: string;
+  status: 'Draft' | 'PendingApproval' | 'Approved' | 'Rejected';
+  aiGenerated: boolean;
+}
+
+export interface RubricCriterion {
+  id: string;
+  rubricId: string;
+  description: string;
+  maxPoints: number;
+  levels: {
+      levelName: string;
+      description: string;
+  }[];
+  order: number;
+}

@@ -268,6 +268,31 @@ export async function createRubric(prevState: any, formData: FormData) {
     }
 }
 
+export async function generateRubricForAssignment(prevState: any, formData: FormData) {
+    const assignmentDescription = formData.get('assignmentDescription') as string;
+    const userId = formData.get('userId') as string;
+
+    if (!assignmentDescription || assignmentDescription.length < 10) {
+        return {
+             errors: { assignmentDescription: ['Please provide a more detailed assignment description.'] },
+             rubric: null,
+        }
+    }
+    
+    try {
+        const result = await generateGradingRubric({ 
+            assignmentPrompt: assignmentDescription,
+            learningObjectives: "Demonstrate understanding of key concepts and critical thinking." // Generic objective
+        });
+        await logAICost(userId, 'Gemini', 'Rubric Generation', 0.005);
+        return { rubric: result, errors: {} };
+    } catch (e) {
+        console.error(e);
+        return { rubric: null, message: "Failed to generate rubric. Please try again.", errors: {} };
+    }
+}
+
+
 export async function createCourse(prevState: any, formData: FormData) {
   const { firestore } = getFirebaseServerServices();
   const instructorId = formData.get('instructorId') as string;
