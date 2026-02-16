@@ -4,8 +4,8 @@ import { useFirestore, useDoc, useCollection, useMemoFirebase } from '@/firebase
 import { doc, collection, query, orderBy } from 'firebase/firestore';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
 import { Skeleton } from '@/components/ui/skeleton';
-import { PlaySquare, FileText, CheckSquare, Link as LinkIcon, ArrowLeft } from 'lucide-react';
-import type { Course, Module, ContentItem } from '@/lib/definitions';
+import { PlaySquare, FileText, CheckSquare, Link as LinkIcon, ArrowLeft, ClipboardEdit } from 'lucide-react';
+import type { Course, Module, ContentItem, Assignment } from '@/lib/definitions';
 import Image from 'next/image';
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
@@ -56,6 +56,52 @@ function ContentItemsList({ courseId, moduleId }: { courseId: string; moduleId: 
         </li>
       ))}
     </ul>
+  );
+}
+
+function AssignmentsList({ courseId, moduleId }: { courseId: string; moduleId: string }) {
+  const firestore = useFirestore();
+
+  const assignmentsQuery = useMemoFirebase(() => {
+    if (!firestore) return null;
+    return query(collection(firestore, `courses/${courseId}/modules/${moduleId}/assignments`), orderBy('order'));
+  }, [firestore, courseId, moduleId]);
+
+  const { data: assignments, isLoading } = useCollection<Assignment>(assignmentsQuery);
+
+  if (isLoading) {
+    return (
+      <div className="pl-4 py-2 space-y-2 mt-2 pt-4 border-t">
+        <Skeleton className="h-4 w-24 mb-2" />
+        <Skeleton className="h-6 w-full" />
+      </div>
+    );
+  }
+
+  if (!assignments || assignments.length === 0) {
+    return null;
+  }
+
+  return (
+    <div className="mt-2 pt-3 border-t">
+      <h4 className="text-xs font-semibold text-muted-foreground px-4 mb-1">ASSIGNMENTS</h4>
+      <ul className="pl-4 pb-1 space-y-1">
+        {assignments.map((item) => (
+          <li key={item.id}>
+            <Link
+              href="#"
+              className="flex items-center gap-3 p-2 rounded-md hover:bg-muted"
+            >
+              <ClipboardEdit className="h-4 w-4 text-primary" />
+              <span className="flex-1">{item.title}</span>
+              <span className="text-xs text-muted-foreground">
+                Due: {new Date(item.deadline).toLocaleDateString()}
+              </span>
+            </Link>
+          </li>
+        ))}
+      </ul>
+    </div>
   );
 }
 
@@ -146,6 +192,7 @@ export default function StudentCoursePage({ params }: { params: { id: string } }
                             </AccordionTrigger>
                             <AccordionContent>
                                 <ContentItemsList courseId={params.id} moduleId={module.id} />
+                                <AssignmentsList courseId={params.id} moduleId={module.id} />
                             </AccordionContent>
                         </AccordionItem>
                     ))}
