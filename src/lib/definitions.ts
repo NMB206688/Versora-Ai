@@ -13,10 +13,13 @@ export interface Course {
   id: string;
   title: string;
   description: string;
-  instructor: string;
+  instructorId: string;
+  instructorName: string;
+  departmentId: string;
+  published: boolean;
+  creationDate: string;
   imageUrl: string;
   imageHint: string;
-  progress: number;
 }
 
 export interface Assignment {

@@ -11,10 +11,11 @@ import {
   sendPasswordResetEmail,
   type Auth,
 } from 'firebase/auth';
-import { getFirestore, doc, setDoc, collection, addDoc } from 'firebase/firestore';
+import { getFirestore, doc, setDoc, collection, addDoc, updateDoc } from 'firebase/firestore';
 import { initializeApp, getApps, getApp, type FirebaseApp } from 'firebase/app';
 import { firebaseConfig } from '@/firebase/config';
 import { PlaceHolderImages } from './placeholder-images';
+import { revalidatePath } from 'next/cache';
 
 // Server-side Firebase initialization for both Auth and Firestore.
 function getFirebaseServerServices() {
@@ -271,4 +272,36 @@ export async function createCourse(prevState: any, formData: FormData) {
     // This message will be returned to the client if redirect fails
     return { message: 'An unexpected error occurred while creating the course. Please try again.' };
   }
+}
+
+const UpdateCourseSchema = z.object({
+  title: z.string().min(1, "Title is required."),
+  description: z.string().min(1, "Description is required."),
+});
+
+export async function updateCourse(courseId: string, prevState: any, formData: FormData) {
+    const validatedFields = UpdateCourseSchema.safeParse({
+        title: formData.get('title'),
+        description: formData.get('description'),
+    });
+
+    if (!validatedFields.success) {
+        return {
+            errors: validatedFields.error.flatten().fieldErrors,
+            message: 'Failed to update course. Please check the fields.',
+        };
+    }
+
+    const { firestore } = getFirebaseServerServices();
+    const courseRef = doc(firestore, 'courses', courseId);
+
+    try {
+        await updateDoc(courseRef, validatedFields.data);
+        revalidatePath(`/instructor/dashboard`);
+        revalidatePath(`/instructor/course/${courseId}/edit`);
+        return { message: 'Course updated successfully.', errors: {} };
+    } catch (error) {
+        console.error('Failed to update course:', error);
+        return { message: 'An unexpected error occurred while updating the course.' };
+    }
 }
