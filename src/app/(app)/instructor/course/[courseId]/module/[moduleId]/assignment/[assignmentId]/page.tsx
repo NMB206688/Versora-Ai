@@ -15,7 +15,7 @@ import { Form, FormControl, FormField, FormItem, FormMessage } from '@/component
 import { Skeleton } from '@/components/ui/skeleton';
 import { useFirestore, useDoc, useCollection, useMemoFirebase, useUser } from '@/firebase';
 import { doc, collection, query, orderBy } from 'firebase/firestore';
-import { updateAssignment, generateRubricForAssignment } from '@/lib/actions';
+import { updateAssignment, generateRubricForAssignment, saveRubric } from '@/lib/actions';
 import { useToast } from '@/hooks/use-toast';
 import { ArrowLeft, ClipboardEdit, Sparkles, AlertCircle } from 'lucide-react';
 import { format } from 'date-fns';
@@ -54,6 +54,14 @@ const initialRubricState: RubricGeneratorState = {
   errors: {},
 };
 
+interface RubricSaveState {
+  success: boolean;
+  message?: string;
+}
+const initialSaveState: RubricSaveState = {
+  success: false,
+};
+
 function SubmitButton() {
   const { pending } = useFormStatus();
   return (
@@ -73,12 +81,50 @@ function GenerateRubricButton() {
     )
 }
 
+function SaveRubricButton() {
+    const { pending } = useFormStatus();
+    return (
+        <Button type="submit" disabled={pending}>
+            {pending ? 'Saving...' : 'Save Rubric'}
+        </Button>
+    )
+}
+
 function RubricSection({ courseId, moduleId, assignmentId, assignment }: { courseId: string; moduleId: string; assignmentId: string; assignment: any }) {
     const [dialogOpen, setDialogOpen] = useState(false);
+    const [generatedRubric, setGeneratedRubric] = useState<GenerateGradingRubricOutput | null>(null);
     const firestore = useFirestore();
     const { user } = useUser();
-    const [state, formAction] = useActionState(generateRubricForAssignment, initialRubricState);
+    const { toast } = useToast();
     
+    const [generationState, generationFormAction] = useActionState(generateRubricForAssignment, initialRubricState);
+    const [saveState, saveFormAction] = useActionState(
+      saveRubric.bind(null, courseId, moduleId, assignmentId, user?.uid || ''), 
+      initialSaveState
+    );
+
+    useEffect(() => {
+        if (generationState.rubric) {
+            setGeneratedRubric(generationState.rubric);
+        }
+    }, [generationState]);
+
+    useEffect(() => {
+        if (saveState.success) {
+            toast({
+                title: "Success",
+                description: saveState.message,
+            });
+            setDialogOpen(false);
+        } else if (saveState.message && !saveState.success) {
+             toast({
+                variant: "destructive",
+                title: "Error",
+                description: saveState.message,
+            });
+        }
+    }, [saveState, toast]);
+
     const rubricRef = useMemoFirebase(() => {
         if (!firestore) return null;
         return doc(firestore, `courses/${courseId}/modules/${moduleId}/assignments/${assignmentId}/rubric`);
@@ -94,6 +140,13 @@ function RubricSection({ courseId, moduleId, assignmentId, assignment }: { cours
 
     const isLoading = isRubricLoading || areCriteriaLoading;
 
+    const handleOpenChange = (open: boolean) => {
+        if (!open) {
+            setGeneratedRubric(null);
+        }
+        setDialogOpen(open);
+    }
+
     if (isLoading) {
         return (
             <Card className="shadow-lg sticky top-24">
@@ -108,7 +161,7 @@ function RubricSection({ courseId, moduleId, assignmentId, assignment }: { cours
         );
     }
     
-    if (rubric && criteria) {
+    if (rubric && criteria && criteria.length > 0) {
         return (
              <Card className="shadow-lg sticky top-24">
                 <CardHeader>
@@ -116,8 +169,8 @@ function RubricSection({ courseId, moduleId, assignmentId, assignment }: { cours
                     <CardDescription>This is the approved rubric for the assignment.</CardDescription>
                 </CardHeader>
                 <CardContent className="max-h-[60vh] overflow-y-auto space-y-4">
-                     {criteria.map((criterion, index) => (
-                        <div key={index} className="border bg-background rounded-lg shadow-sm">
+                     {criteria.map((criterion) => (
+                        <div key={criterion.id} className="border bg-background rounded-lg shadow-sm">
                             <div className="p-4 border-b">
                                 <h4 className="font-bold text-base">{criterion.description}</h4>
                                 <p className="text-sm text-muted-foreground">Max Points: {criterion.maxPoints}</p>
@@ -145,7 +198,7 @@ function RubricSection({ courseId, moduleId, assignmentId, assignment }: { cours
             </CardHeader>
             <CardContent className="text-center text-muted-foreground">
                 <p className="mb-4">No rubric has been created for this assignment yet.</p>
-                 <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
+                 <Dialog open={dialogOpen} onOpenChange={handleOpenChange}>
                     <DialogTrigger asChild>
                         <Button>
                             <Sparkles className="mr-2 h-4 w-4" />
@@ -153,16 +206,17 @@ function RubricSection({ courseId, moduleId, assignmentId, assignment }: { cours
                         </Button>
                     </DialogTrigger>
                     <DialogContent className="sm:max-w-2xl">
-                         <form action={formAction}>
-                             <DialogHeader>
-                                <DialogTitle className="font-headline text-2xl">Generate Grading Rubric</DialogTitle>
-                                <DialogDescription>
-                                    Review the assignment details and generate a structured rubric with AI. You'll be able to review it before saving.
-                                </DialogDescription>
-                            </DialogHeader>
-                            {state.rubric ? (
+                         {generatedRubric ? (
+                            <form action={saveFormAction}>
+                                <DialogHeader>
+                                    <DialogTitle className="font-headline text-2xl">Review Generated Rubric</DialogTitle>
+                                    <DialogDescription>
+                                        Review the AI-generated rubric. You can save it or generate a new one.
+                                    </DialogDescription>
+                                </DialogHeader>
+                                <input type="hidden" name="rubricData" value={JSON.stringify(generatedRubric)} />
                                 <div className="my-4 max-h-[60vh] overflow-y-auto p-1 space-y-4">
-                                    {state.rubric.criteria.map((criterion, index) => (
+                                    {generatedRubric.criteria.map((criterion, index) => (
                                         <div key={index} className="border bg-muted/20 rounded-lg">
                                             <div className="p-3 border-b">
                                                 <h4 className="font-bold">{criterion.description}</h4>
@@ -179,7 +233,19 @@ function RubricSection({ courseId, moduleId, assignmentId, assignment }: { cours
                                         </div>
                                     ))}
                                 </div>
-                            ) : (
+                                <DialogFooter>
+                                    <Button type="button" variant="ghost" onClick={() => setGeneratedRubric(null)}>Generate Again</Button>
+                                    <SaveRubricButton />
+                                </DialogFooter>
+                            </form>
+                         ) : (
+                             <form action={generationFormAction}>
+                                 <DialogHeader>
+                                    <DialogTitle className="font-headline text-2xl">Generate Grading Rubric</DialogTitle>
+                                    <DialogDescription>
+                                        Review the assignment details and generate a structured rubric with AI. You'll be able to review it before saving.
+                                    </DialogDescription>
+                                </DialogHeader>
                                 <div className="grid gap-4 py-4">
                                     <input type="hidden" name="userId" value={user?.uid} />
                                     <div className="grid gap-2">
@@ -190,29 +256,22 @@ function RubricSection({ courseId, moduleId, assignmentId, assignment }: { cours
                                             defaultValue={assignment?.description}
                                             className="min-h-32"
                                         />
-                                         {state?.errors?.assignmentDescription && (
-                                            <p className="text-sm text-destructive">{state.errors.assignmentDescription[0]}</p>
+                                         {generationState?.errors?.assignmentDescription && (
+                                            <p className="text-sm text-destructive">{generationState.errors.assignmentDescription[0]}</p>
                                         )}
                                     </div>
-                                    {state?.message && (
+                                    {generationState?.message && !generationState.rubric && (
                                         <Alert variant="destructive">
                                             <AlertCircle className="h-4 w-4" />
-                                            <AlertDescription>{state.message}</AlertDescription>
+                                            <AlertDescription>{generationState.message}</AlertDescription>
                                         </Alert>
                                     )}
                                 </div>
-                            )}
-                            <DialogFooter>
-                                {state.rubric ? (
-                                     <>
-                                        <Button variant="ghost" onClick={() => (state.rubric = null)}>Generate Again</Button>
-                                        <Button disabled>Save Rubric (Coming Soon)</Button>
-                                     </>
-                                ) : (
+                                <DialogFooter>
                                     <GenerateRubricButton />
-                                )}
-                            </DialogFooter>
-                         </form>
+                                </DialogFooter>
+                             </form>
+                         )}
                     </DialogContent>
                 </Dialog>
             </CardContent>

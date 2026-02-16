@@ -3,7 +3,7 @@
 import { z } from 'zod';
 import { redirect } from 'next/navigation';
 import { generateWritingFeedback } from '@/ai/flows/generate-writing-feedback';
-import { generateGradingRubric } from '@/ai/flows/generate-grading-rubric';
+import { generateGradingRubric, type GenerateGradingRubricOutput } from '@/ai/flows/generate-grading-rubric';
 import {
   getAuth,
   createUserWithEmailAndPassword,
@@ -11,12 +11,12 @@ import {
   sendPasswordResetEmail,
   type Auth,
 } from 'firebase/auth';
-import { getFirestore, doc, setDoc, collection, addDoc, updateDoc, getDocs, query, orderBy, limit } from 'firebase/firestore';
+import { getFirestore, doc, setDoc, collection, addDoc, updateDoc, getDocs, query, orderBy, limit, writeBatch } from 'firebase/firestore';
 import { initializeApp, getApps, getApp, type FirebaseApp } from 'firebase/app';
 import { firebaseConfig } from '@/firebase/config';
 import { PlaceHolderImages } from './placeholder-images';
 import { revalidatePath } from 'next/cache';
-import type { ContentItem } from './definitions';
+import type { ContentItem, Rubric, RubricCriterion } from './definitions';
 
 // Server-side Firebase initialization for both Auth and Firestore.
 function getFirebaseServerServices() {
@@ -497,4 +497,69 @@ export async function updateAssignment(
         console.error('Failed to update assignment:', error);
         return { message: 'An unexpected error occurred while updating the assignment.' };
     }
+}
+
+export async function saveRubric(
+  courseId: string,
+  moduleId: string,
+  assignmentId: string,
+  userId: string,
+  prevState: any,
+  formData: FormData,
+) {
+  if (!userId) {
+    return { success: false, message: "Authentication error: User ID is missing." };
+  }
+
+  const rubricDataJSON = formData.get('rubricData') as string;
+  if (!rubricDataJSON) {
+      return { success: false, message: "No rubric data provided." };
+  }
+
+  let rubricData: GenerateGradingRubricOutput;
+  try {
+    rubricData = JSON.parse(rubricDataJSON);
+  } catch (error) {
+    return { success: false, message: "Invalid rubric data format." };
+  }
+  
+  const { firestore } = getFirebaseServerServices();
+  const rubricRef = doc(firestore, `courses/${courseId}/modules/${moduleId}/assignments/${assignmentId}/rubric`);
+  
+  const batch = writeBatch(firestore);
+
+  // 1. Create the main rubric document
+  const rubricDoc: Omit<Rubric, 'id'> = {
+      assignmentId: assignmentId,
+      instructorId: userId,
+      creationDate: new Date().toISOString(),
+      status: 'Approved',
+      aiGenerated: true,
+  };
+  batch.set(rubricRef, rubricDoc);
+
+  // 2. Create each criterion document in the 'criteria' subcollection
+  const criteriaColRef = collection(rubricRef, 'criteria');
+  rubricData.criteria.forEach((criterion, index) => {
+      const criterionDocRef = doc(criteriaColRef); // Auto-generate ID for each criterion
+      const newCriterion: Omit<RubricCriterion, 'id'> = {
+          rubricId: rubricRef.id, // This will be the string "rubric"
+          description: criterion.description,
+          maxPoints: criterion.maxPoints,
+          levels: criterion.levels,
+          order: index + 1,
+      };
+      batch.set(criterionDocRef, newCriterion);
+  });
+
+  try {
+      await batch.commit();
+      await logAICost(userId, 'Gemini', 'Rubric Save', 0.001);
+      // Revalidate the path to ensure the UI updates with the new rubric
+      revalidatePath(`/instructor/course/${courseId}/module/${moduleId}/assignment/${assignmentId}`);
+      return { success: true, message: 'Rubric saved successfully.' };
+  } catch (error) {
+      console.error("Failed to save rubric:", error);
+      return { success: false, message: 'An unexpected error occurred while saving the rubric.' };
+  }
 }
