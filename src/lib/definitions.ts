@@ -22,6 +22,7 @@ export interface Course {
   creationDate: string;
   imageUrl: string;
   imageHint: string;
+  studentMembers?: Record<string, boolean>;
 }
 
 export interface Assignment {
@@ -35,6 +36,10 @@ export interface Assignment {
   type: string;
   learningObjectiveIds?: string[];
   order: number;
+  // Denormalized for security rules
+  courseInstructorId?: string;
+  coursePublished?: boolean;
+  courseStudentMembers?: Record<string, boolean>;
 }
 
 export interface Module {
@@ -43,6 +48,10 @@ export interface Module {
   title: string;
   description: string;
   order: number;
+  // Denormalized for security rules
+  courseInstructorId?: string;
+  coursePublished?: boolean;
+  courseStudentMembers?: Record<string, boolean>;
 }
 
 export interface ContentItem {
@@ -54,6 +63,10 @@ export interface ContentItem {
   contentUrl?: string;
   textContent?: string;
   order: number;
+  // Denormalized for security rules
+  courseInstructorId?: string;
+  coursePublished?: boolean;
+  courseStudentMembers?: Record<string, boolean>;
 }
 
 export interface Enrollment {
@@ -62,6 +75,8 @@ export interface Enrollment {
     courseId: string;
     enrollmentDate: string;
     completionDate?: string;
+    // Denormalized for queries
+    courseInstructorId?: string;
 }
 
 export interface Rubric {
@@ -91,6 +106,7 @@ export interface Submission {
   courseId: string;
   moduleId: string;
   assignmentTitle: string;
+  courseTitle: string;
   studentId: string;
   studentName: string;
   submissionDate: string;
@@ -108,6 +124,26 @@ export interface Feedback {
   creationDate: string;
   type: 'Clarity' | 'Structure' | 'Citation' | 'Grammar' | 'General';
 }
-    
 
-    
+export interface Portfolio {
+  id: string; // Will typically be the student's UID
+  studentId: string;
+  title: string;
+  description: string;
+  creationDate: string;
+  lastUpdateDate: string;
+}
+
+export interface PortfolioItem {
+  id: string;
+  portfolioId: string;
+  studentId: string;
+  submissionId: string;
+  reflection: string;
+  addedDate: string;
+  // Denormalized data for easy display
+  assignmentTitle: string;
+  courseTitle: string;
+  grade: number;
+  submissionExcerpt: string;
+}

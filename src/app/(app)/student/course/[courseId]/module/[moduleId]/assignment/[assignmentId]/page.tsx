@@ -1,6 +1,6 @@
 'use client';
 
-import { useActionState, useEffect, useMemo } from 'react';
+import { useActionState, useEffect, useMemo, useState } from 'react';
 import { useFormStatus } from 'react-dom';
 import Link from 'next/link';
 import { useFirestore, useDoc, useCollection, useMemoFirebase, useUser } from '@/firebase';
@@ -13,8 +13,18 @@ import { ArrowLeft, BookOpen, CheckCircle, MessageSquare, PlusCircle } from 'luc
 import { format } from 'date-fns';
 import type { Assignment, Rubric, RubricCriterion, Submission, Feedback } from '@/lib/definitions';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import { submitAssignment } from '@/lib/actions';
+import { submitAssignment, addSubmissionToPortfolio } from '@/lib/actions';
 import { useToast } from '@/hooks/use-toast';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
+import { Label } from '@/components/ui/label';
 
 function RubricDisplay({ courseId, moduleId, assignmentId }: { courseId: string; moduleId: string; assignmentId: string; }) {
     const firestore = useFirestore();
@@ -26,7 +36,6 @@ function RubricDisplay({ courseId, moduleId, assignmentId }: { courseId: string;
 
     const criteriaQuery = useMemoFirebase(() => {
         if (!firestore || !rubricRef) return null;
-        // The rubric ID is always "rubric" as it's a singleton document
         return query(collection(rubricRef, 'criteria'), orderBy('order'));
     }, [firestore, rubricRef]);
 
@@ -36,30 +45,16 @@ function RubricDisplay({ courseId, moduleId, assignmentId }: { courseId: string;
     const isLoading = isRubricLoading || areCriteriaLoading;
 
     if (isLoading) {
+        return <div className="space-y-4"><Skeleton className="h-24 w-full" /><Skeleton className="h-24 w-full" /></div>;
+    }
+
+    if (!rubric || !criteria || criteria.length === 0 || rubric.status !== 'Approved') {
         return (
-            <div className="space-y-4">
-                <Skeleton className="h-24 w-full" />
-                <Skeleton className="h-24 w-full" />
-            </div>
+            <Alert>
+                <BookOpen className="h-4 w-4" />
+                <AlertDescription>No approved grading rubric is available for this assignment.</AlertDescription>
+            </Alert>
         );
-    }
-
-    if (!rubric || !criteria || criteria.length === 0) {
-        return (
-            <Alert>
-                <BookOpen className="h-4 w-4" />
-                <AlertDescription>No grading rubric is available for this assignment yet.</AlertDescription>
-            </Alert>
-        )
-    }
-
-    if (rubric.status !== 'Approved') {
-         return (
-            <Alert>
-                <BookOpen className="h-4 w-4" />
-                <AlertDescription>The grading rubric is not yet approved by the instructor.</AlertDescription>
-            </Alert>
-        )
     }
 
     return (
@@ -93,6 +88,71 @@ function SubmitButton() {
   );
 }
 
+function AddToPortfolioDialog({ submission }: { submission: Submission }) {
+    const { toast } = useToast();
+    const [open, setOpen] = useState(false);
+    
+    const [state, formAction] = useActionState(addSubmissionToPortfolio.bind(null, submission), {
+        success: false,
+        message: '',
+    });
+
+    useEffect(() => {
+        if (state.message) {
+            toast({
+                title: state.success ? 'Success' : 'Error',
+                description: state.message,
+                variant: state.success ? 'default' : 'destructive',
+            });
+            if (state.success) {
+                setOpen(false);
+            }
+        }
+    }, [state, toast]);
+
+    return (
+        <Dialog open={open} onOpenChange={setOpen}>
+            <DialogTrigger asChild>
+                <Button variant="secondary">
+                    <PlusCircle className="mr-2 h-4 w-4" />
+                    Add to Portfolio
+                </Button>
+            </DialogTrigger>
+            <DialogContent>
+                <form action={formAction}>
+                    <DialogHeader>
+                        <DialogTitle className="font-headline text-2xl">Add to Portfolio</DialogTitle>
+                        <DialogDescription>
+                            Add a reflection about what you learned from this assignment. This will be displayed in your portfolio.
+                        </DialogDescription>
+                    </DialogHeader>
+                    <div className="py-4 space-y-4">
+                        <div className="space-y-2">
+                            <Label htmlFor="reflection">My Reflection</Label>
+                            <Textarea
+                                id="reflection"
+                                name="reflection"
+                                placeholder="Reflect on your work, the challenges you faced, and what you're proud of..."
+                                className="min-h-32"
+                                required
+                            />
+                        </div>
+                        {state.message && !state.success && (
+                            <Alert variant="destructive"><AlertDescription>{state.message}</AlertDescription></Alert>
+                        )}
+                    </div>
+                    <DialogFooter>
+                        <Button type="button" variant="ghost" onClick={() => setOpen(false)}>Cancel</Button>
+                        <Button type="submit" disabled={useFormStatus().pending}>
+                            {useFormStatus().pending ? 'Adding...' : 'Add to Portfolio'}
+                        </Button>
+                    </DialogFooter>
+                </form>
+            </DialogContent>
+        </Dialog>
+    );
+}
+
 function FeedbackSection({ courseId, moduleId, assignmentId, submissionId }: { courseId: string; moduleId: string; assignmentId: string; submissionId: string }) {
     const firestore = useFirestore();
 
@@ -108,7 +168,7 @@ function FeedbackSection({ courseId, moduleId, assignmentId, submissionId }: { c
     }
 
     if (!feedback || feedback.length === 0) {
-        return null; // Don't show the card if there's no feedback
+        return null;
     }
 
     return (
@@ -122,7 +182,7 @@ function FeedbackSection({ courseId, moduleId, assignmentId, submissionId }: { c
             <CardContent className="space-y-4">
                 {feedback.map((item) => (
                     <div key={item.id} className="p-4 border rounded-lg bg-background">
-                        <p className="text-muted-foreground">{item.content}</p>
+                        <p className="text-muted-foreground whitespace-pre-wrap">{item.content}</p>
                         <p className="text-xs text-muted-foreground mt-2">— Graded on {format(new Date(item.creationDate), 'PPP')}</p>
                     </div>
                 ))}
@@ -188,9 +248,7 @@ export default function StudentAssignmentPage({ params }: { params: { courseId: 
             <header className="mb-8">
                 {isLoading ? (
                     <div className="space-y-2">
-                        <Skeleton className="h-8 w-72" />
-                        <Skeleton className="h-4 w-48" />
-                        <Skeleton className="h-4 w-32" />
+                        <Skeleton className="h-8 w-72" /><Skeleton className="h-4 w-48" /><Skeleton className="h-4 w-32" />
                     </div>
                 ) : assignment ? (
                     <>
@@ -212,76 +270,61 @@ export default function StudentAssignmentPage({ params }: { params: { courseId: 
 
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
                 <div className="lg:col-span-2 space-y-8">
-                     {/* Instructions Card */}
                     <Card className="shadow-lg">
-                        <CardHeader>
-                            <CardTitle className="font-headline text-2xl">Instructions</CardTitle>
-                        </CardHeader>
+                        <CardHeader><CardTitle className="font-headline text-2xl">Instructions</CardTitle></CardHeader>
                         <CardContent>
                              {isLoading ? (
-                                <div className="space-y-2">
-                                    <Skeleton className="h-4 w-full" />
-                                    <Skeleton className="h-4 w-full" />
-                                    <Skeleton className="h-4 w-5/6" />
-                                </div>
+                                <div className="space-y-2"><Skeleton className="h-4 w-full" /><Skeleton className="h-4 w-full" /><Skeleton className="h-4 w-5/6" /></div>
                              ) : (
-                                <div className="prose prose-stone dark:prose-invert max-w-none text-muted-foreground">
-                                    <p>{assignment?.description}</p>
+                                <div className="prose prose-stone dark:prose-invert max-w-none text-muted-foreground whitespace-pre-wrap">
+                                    {assignment?.description}
                                 </div>
                              )}
                         </CardContent>
                     </Card>
 
-                     {/* Submission Card */}
                      <Card className="shadow-lg">
                         <CardHeader>
                             <CardTitle className="font-headline text-2xl">Your Submission</CardTitle>
-                            <CardDescription>
-                                {submission ? 'Here is your submitted work.' : 'Enter your submission text below. You can only submit once.'}
-                            </CardDescription>
+                            <CardDescription>{submission ? 'Here is your submitted work.' : 'Enter your submission text below. You can only submit once.'}</CardDescription>
                         </CardHeader>
                         <CardContent>
                             {isLoading ? (
-                                     <Skeleton className="h-48 w-full" />
-                                 ) : submission ? (
-                                     <div className="space-y-4">
-                                         <Alert variant="default" className="border-green-500 bg-green-50 text-green-800">
-                                            <CheckCircle className="h-4 w-4 !text-green-600" />
-                                            <AlertDescription className="flex justify-between items-center">
-                                                <span>Submitted on {format(new Date(submission.submissionDate), 'PPP')}</span>
-                                                {submission.grade !== undefined && (
-                                                    <span className="font-bold text-lg">Grade: {submission.grade} / {assignment?.pointsPossible}</span>
-                                                )}
-                                            </AlertDescription>
-                                        </Alert>
+                                <Skeleton className="h-48 w-full" />
+                            ) : submission ? (
+                                <div className="space-y-4">
+                                    <Alert variant="default" className="border-green-500 bg-green-50 text-green-800">
+                                        <CheckCircle className="h-4 w-4 !text-green-600" />
+                                        <AlertDescription className="flex justify-between items-center">
+                                            <span>Submitted on {format(new Date(submission.submissionDate), 'PPP')}</span>
+                                            {submission.grade !== undefined && (
+                                                <span className="font-bold text-lg">Grade: {submission.grade} / {assignment?.pointsPossible}</span>
+                                            )}
+                                        </AlertDescription>
+                                    </Alert>
 
-                                        {submission.grade !== undefined && (
-                                            <div className="flex justify-end">
-                                                <Button variant="secondary" disabled>
-                                                    <PlusCircle className="mr-2 h-4 w-4" />
-                                                    Add to Portfolio
-                                                </Button>
-                                            </div>
-                                        )}
+                                    {submission.grade !== undefined && (
+                                        <div className="flex justify-end">
+                                            <AddToPortfolioDialog submission={submission} />
+                                        </div>
+                                    )}
 
-                                        <div className="prose prose-stone dark:prose-invert max-w-none text-muted-foreground whitespace-pre-wrap p-4 bg-muted/50 rounded-md border">
-                                            {submission.textContent}
-                                        </div>
-                                     </div>
-                                 ) : (
-                                    <form action={formAction} className="space-y-4">
-                                        <Textarea
-                                            name="textContent"
-                                            placeholder="Begin writing your submission here..."
-                                            className="min-h-72 text-base"
-                                            required
-                                        />
-                                        <div className="flex justify-end gap-2">
-                                            <Button variant="outline" type="button" disabled>Save Draft</Button>
-                                            <SubmitButton />
-                                        </div>
-                                    </form>
-                                 )}
+                                    <div className="prose prose-stone dark:prose-invert max-w-none text-muted-foreground whitespace-pre-wrap p-4 bg-muted/50 rounded-md border">
+                                        {submission.textContent}
+                                    </div>
+                                </div>
+                            ) : (
+                                <form action={formAction} className="space-y-4">
+                                    <Textarea name="textContent" placeholder="Begin writing your submission here..." className="min-h-72 text-base" required />
+                                    <div className="flex justify-end gap-2">
+                                        <Button variant="outline" type="button" disabled>Save Draft</Button>
+                                        <SubmitButton />
+                                    </div>
+                                    {state.message && !state.success && (
+                                        <Alert variant="destructive"><AlertDescription>{state.message}</AlertDescription></Alert>
+                                    )}
+                                </form>
+                            )}
                         </CardContent>
                      </Card>
                      {submission && (
@@ -294,17 +337,10 @@ export default function StudentAssignmentPage({ params }: { params: { courseId: 
                      )}
                 </div>
                 <div className="lg:col-span-1">
-                    {/* Rubric Card */}
                     <Card className="shadow-lg sticky top-24">
-                        <CardHeader>
-                            <CardTitle className="font-headline text-2xl">Grading Rubric</CardTitle>
-                        </CardHeader>
+                        <CardHeader><CardTitle className="font-headline text-2xl">Grading Rubric</CardTitle></CardHeader>
                         <CardContent>
-                            <RubricDisplay
-                                courseId={params.courseId}
-                                moduleId={params.moduleId}
-                                assignmentId={params.assignmentId}
-                            />
+                            <RubricDisplay courseId={params.courseId} moduleId={params.moduleId} assignmentId={params.assignmentId} />
                         </CardContent>
                     </Card>
                 </div>

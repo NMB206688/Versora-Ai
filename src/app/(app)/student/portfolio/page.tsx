@@ -11,29 +11,21 @@ import {
 import { Button } from '@/components/ui/button';
 import { Archive } from 'lucide-react';
 import Link from 'next/link';
-
-// Placeholder data - in a real scenario, this would come from Firestore
-const portfolioItems = [
-  {
-    id: '1',
-    assignmentTitle: 'The Impact of AI on Modern Art',
-    courseTitle: 'Introduction to Art History',
-    grade: 95,
-    reflection: 'This was my favorite paper. I was able to combine my interest in technology with the course material, and I am proud of the analysis I produced, especially regarding generative art models.',
-    submissionExcerpt: 'The advent of artificial intelligence has irrevocably altered the landscape of artistic creation. From style transfer algorithms that mimic the brushstrokes of masters to generative adversarial networks (GANs) that create entirely novel visual works, AI is not merely a tool but a collaborative partner in the artistic process...',
-  },
-  {
-    id: '2',
-    assignmentTitle: 'Data Analysis Project: Housing Market Trends',
-    courseTitle: 'Data Science 101',
-    grade: 98,
-    reflection: 'This project was challenging but incredibly rewarding. Cleaning the dataset was a huge undertaking, but it led to some fascinating insights. The visualization I created for price distribution was particularly effective in communicating my findings.',
-    submissionExcerpt: 'The analysis of the metropolitan housing dataset reveals a significant correlation between proximity to public transit and median housing price appreciation over the past decade. Utilizing a linear regression model, we can project a 15% increase in property value for homes within a 0.5-mile radius of a new transit station...',
-  }
-];
+import { useCollection, useFirestore, useMemoFirebase, useUser } from '@/firebase';
+import { collection, query, orderBy } from 'firebase/firestore';
+import type { PortfolioItem } from '@/lib/definitions';
+import { Skeleton } from '@/components/ui/skeleton';
 
 export default function PortfolioPage() {
-  const hasItems = portfolioItems.length > 0;
+  const { user } = useUser();
+  const firestore = useFirestore();
+
+  const portfolioItemsQuery = useMemoFirebase(() => {
+    if (!firestore || !user) return null;
+    return query(collection(firestore, `users/${user.uid}/portfolio/main/items`), orderBy('addedDate', 'desc'));
+  }, [firestore, user]);
+
+  const { data: portfolioItems, isLoading } = useCollection<PortfolioItem>(portfolioItemsQuery);
 
   return (
     <div className="container mx-auto">
@@ -44,7 +36,12 @@ export default function PortfolioPage() {
         <p className="text-muted-foreground">A curated collection of your best work.</p>
       </div>
       
-      {hasItems ? (
+      {isLoading ? (
+         <div className="grid gap-8 md:grid-cols-2">
+            <Card><CardHeader><Skeleton className="h-6 w-3/4" /><Skeleton className="h-4 w-1/2 mt-2" /></CardHeader><CardContent><Skeleton className="h-20 w-full" /><Skeleton className="h-4 w-20 mt-4" /><Skeleton className="h-12 w-full mt-1" /></CardContent><CardFooter><Skeleton className="h-10 w-full" /></CardFooter></Card>
+            <Card><CardHeader><Skeleton className="h-6 w-3/4" /><Skeleton className="h-4 w-1/2 mt-2" /></CardHeader><CardContent><Skeleton className="h-20 w-full" /><Skeleton className="h-4 w-20 mt-4" /><Skeleton className="h-12 w-full mt-1" /></CardContent><CardFooter><Skeleton className="h-10 w-full" /></CardFooter></Card>
+         </div>
+      ) : portfolioItems && portfolioItems.length > 0 ? (
         <div className="grid gap-8 md:grid-cols-2">
           {portfolioItems.map((item) => (
             <Card key={item.id} className="shadow-lg flex flex-col">

@@ -14,7 +14,6 @@ import {
   SidebarMenu,
   SidebarMenuItem,
   SidebarMenuButton,
-  SidebarInset,
   SidebarTrigger,
 } from '@/components/ui/sidebar';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -24,12 +23,12 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Form, FormControl, FormField, FormItem, FormMessage, FormLabel } from '@/components/ui/form';
 import { Skeleton } from '@/components/ui/skeleton';
-import { useFirestore, useDoc, useCollection, useMemoFirebase } from '@/firebase';
+import { useFirestore, useDoc, useCollection, useMemoFirebase, useUser } from '@/firebase';
 import { doc, collection, query, orderBy } from 'firebase/firestore';
 import { BookOpen, GripVertical, PlaySquare, FileText, CheckSquare, PlusCircle, Link as LinkIcon, ClipboardEdit } from 'lucide-react';
-import { updateCourse, createModule, createContentItem, createAssignment, updateContentItem } from '@/lib/actions';
+import { updateCourse, createModule, createContentItem, createAssignment, updateContentItem, toggleCoursePublished } from '@/lib/actions';
 import { useToast } from '@/hooks/use-toast';
-import type { Module, ContentItem, Assignment } from '@/lib/definitions';
+import type { Module, ContentItem, Assignment, Course } from '@/lib/definitions';
 import {
   Dialog,
   DialogContent,
@@ -44,6 +43,18 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { Switch } from '@/components/ui/switch';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog"
 
 const CourseEditSchema = z.object({
   title: z.string().min(1, 'Title is required'),
@@ -398,6 +409,60 @@ function AssignmentsList({ courseId, moduleId }: { courseId: string; moduleId: s
   );
 }
 
+function PublishCourseSwitch({ course }: { course: Course }) {
+  const { user } = useUser();
+  const { toast } = useToast();
+  const [isPending, startTransition] = useTransition();
+
+  const handlePublishToggle = () => {
+    if (!user) return;
+    startTransition(async () => {
+      const result = await toggleCoursePublished(course.id, course.published, user.uid);
+      if (result.success) {
+        toast({ title: 'Success', description: result.message });
+      } else {
+        toast({ title: 'Error', description: result.message, variant: 'destructive' });
+      }
+    });
+  };
+
+  return (
+    <AlertDialog>
+      <AlertDialogTrigger asChild>
+        <div className="flex items-center space-x-2">
+          <Switch
+            id="publish-switch"
+            checked={course.published}
+            // Use onCheckedChange to trigger the dialog, not the action directly
+            onCheckedChange={() => {}} 
+            disabled={isPending}
+          />
+          <Label htmlFor="publish-switch" className="cursor-pointer">
+            {isPending ? 'Updating...' : course.published ? 'Published' : 'Unpublished'}
+          </Label>
+        </div>
+      </AlertDialogTrigger>
+      <AlertDialogContent>
+        <AlertDialogHeader>
+          <AlertDialogTitle>Are you sure?</AlertDialogTitle>
+          <AlertDialogDescription>
+            {course.published
+              ? 'Unpublishing this course will make it inaccessible to students. They will not be able to see its content or submit assignments.'
+              : 'Publishing this course will make it visible to students in the course catalog, allowing them to enroll and access its content.'}
+          </AlertDialogDescription>
+        </AlertDialogHeader>
+        <AlertDialogFooter>
+          <AlertDialogCancel>Cancel</AlertDialogCancel>
+          <AlertDialogAction onClick={handlePublishToggle}>
+            {course.published ? 'Yes, Unpublish' : 'Yes, Publish'}
+          </AlertDialogAction>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
+  );
+}
+
+
 export default function CourseEditPage({ params }: { params: { id: string } }) {
   const { toast } = useToast();
   const firestore = useFirestore();
@@ -412,7 +477,7 @@ export default function CourseEditPage({ params }: { params: { id: string } }) {
     return query(collection(firestore, `courses/${params.id}/modules`), orderBy('order'));
   }, [firestore, params.id]);
 
-  const { data: course, isLoading: isCourseLoading } = useDoc(courseRef);
+  const { data: course, isLoading: isCourseLoading } = useDoc<Course>(courseRef);
   const { data: modules, isLoading: areModulesLoading } = useCollection<Module>(modulesQuery);
 
   const [state, formAction] = useActionState(updateCourse.bind(null, params.id), {
@@ -517,7 +582,7 @@ export default function CourseEditPage({ params }: { params: { id: string } }) {
                   )}
                 </div>
               </div>
-              <Button className="bg-accent text-accent-foreground hover:bg-accent/90">Publish Course</Button>
+               {course && <PublishCourseSwitch course={course} />}
             </header>
 
             <Card className="shadow-lg">

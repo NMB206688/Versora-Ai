@@ -114,9 +114,10 @@ service cloud.firestore {
      * @principle Restricts access to a user's own data tree.
      */
     match /users/{userId} {
-      allow get, update: if isOwner(userId);
+      allow get, update: if isOwner(userId) || isAdmin();
+      allow list: if isAdmin();
       allow create: if isOwner(userId) && request.resource.data.id == userId;
-      allow list, delete: if false;
+      allow delete: if false;
     }
 
     /**
@@ -174,14 +175,14 @@ service cloud.firestore {
     }
 
     /**
-     * @description Course documents can be managed by the instructor. Enrolled students can read published courses.
+     * @description Course documents can be managed by the instructor. Published courses are readable by any signed-in user.
      * @path /courses/{courseId}
-     * @allow (update) An instructor updates their course description: auth.uid == resource.data.instructorId
+     * @allow (get) A student views a published course in the catalog.
      * @deny (update) A student tries to change the course title.
      * @principle Enforces ownership for writes and shared, conditional access for reads.
      */
     match /courses/{courseId} {
-      allow get: if canReadCourseContent(resource.data);
+      allow get: if resource.data.published == true || isCourseInstructor(resource.data);
       allow list: if isSignedIn(); // `get` rule secures the results of the query
       allow create: if isSignedIn() && isOwner(request.resource.data.instructorId);
       allow update, delete: if isCourseInstructor(resource.data);
@@ -215,8 +216,7 @@ service cloud.firestore {
     match /courses/{courseId}/modules/{moduleId} {
       allow get: if canReadCourseContent(resource.data);
       allow list: if isSignedIn(); // `get` rule secures the results of the query
-      allow create: if isCourseInstructor(get(/databases/$(database)/documents/courses/$(courseId)).data);
-      allow update, delete: if isCourseInstructor(resource.data);
+      allow create, update, delete: if isCourseInstructor(get(/databases/$(database)/documents/courses/$(courseId)).data);
     }
 
     /**
@@ -229,22 +229,20 @@ service cloud.firestore {
     match /courses/{courseId}/learningObjectives/{objectiveId} {
       allow get: if canReadCourseContent(resource.data);
       allow list: if isSignedIn(); // `get` rule secures the results of the query
-      allow create: if isCourseInstructor(get(/databases/$(database)/documents/courses/$(courseId)).data);
-      allow update, delete: if isCourseInstructor(resource.data);
+      allow create, update, delete: if isCourseInstructor(get(/databases/$(database)/documents/courses/$(courseId)).data);
     }
 
     /**
      * @description Course content items are managed by the instructor and readable by enrolled students if published.
-     * @path /courses/{courseId}/contentItems/{itemId}
+     * @path /courses/{courseId}/modules/{moduleId}/contentItems/{contentItemId}
      * @allow (get) An enrolled student views a content item in a published course.
      * @deny (create) A student tries to add a new learning objective to a course.
      * @principle Inherits authorization from the parent course via denormalized fields.
      */
-    match /courses/{courseId}/contentItems/{itemId} {
+    match /courses/{courseId}/modules/{moduleId}/contentItems/{contentItemId} {
       allow get: if canReadCourseContent(resource.data);
       allow list: if isSignedIn(); // `get` rule secures the results of the query
-      allow create: if isCourseInstructor(get(/databases/$(database)/documents/courses/$(courseId)).data);
-      allow update, delete: if isCourseInstructor(resource.data);
+      allow create, update, delete: if isCourseInstructor(get(/databases/$(database)/documents/courses/$(courseId)).data);
     }
 
     /**
@@ -257,8 +255,7 @@ service cloud.firestore {
     match /courses/{courseId}/modules/{moduleId}/assignments/{assignmentId} {
       allow get: if canReadCourseContent(resource.data);
       allow list: if isSignedIn(); // `get` rule secures the results of the query
-      allow create: if isCourseInstructor(get(/databases/$(database)/documents/courses/$(courseId)).data);
-      allow update, delete: if isCourseInstructor(resource.data);
+      allow create, update, delete: if isCourseInstructor(get(/databases/$(database)/documents/courses/$(courseId)).data);
     }
 
     /**
@@ -285,34 +282,39 @@ service cloud.firestore {
         allow list: if isCourseInstructor(get(/databases/$(database)/documents/courses/$(courseId)).data);
         allow create, update, delete: if isCourseInstructor(get(/databases/$(database)/documents/courses/$(courseId)).data);
     }
-
+    
+    // --------------------------------
+    // Submissions and Feedback (Collection Group)
+    // --------------------------------
+    
     /**
-     * @description Submissions can be created/managed by the submitting student. They can be read by the instructor.
-     * @path /courses/{courseId}/modules/{moduleId}/assignments/{assignmentId}/submissions/{submissionId}
-     * @allow (create) A student submits their work: auth.uid == request.resource.data.studentId
-     * @deny (update) An instructor tries to change a student's submitted work.
-     * @principle Implements composite ownership: student has write access, instructor has read access.
+     * @description Collection group match for all 'submissions' collections.
      */
-    match /courses/{courseId}/modules/{moduleId}/assignments/{assignmentId}/submissions/{submissionId} {
+    match /{path=**}/submissions/{submissionId} {
+       /**
+       * @description Submissions can be created/managed by the submitting student. They can be read by the instructor.
+       * @path /courses/{courseId}/modules/{moduleId}/assignments/{assignmentId}/submissions/{submissionId}
+       * @allow (create) A student submits their work: auth.uid == request.resource.data.studentId
+       * @deny (update) An instructor tries to change a student's submitted work.
+       * @principle Implements composite ownership: student has write access, instructor has read access.
+       */
       allow get: if isSubmissionOwner(resource.data) || isCourseInstructor(resource.data);
       allow list: if isSignedIn();
       allow create: if isSubmissionOwner(request.resource.data);
       allow update, delete: if isSubmissionOwner(resource.data);
-    }
 
-    /**
-     * @description Feedback can be written by instructors and read by the student who owns the submission.
-     * @path /courses/{courseId}/modules/{moduleId}/assignments/{assignmentId}/submissions/{submissionId}/feedback/{feedbackId}
-     * @allow (get) A student reads feedback on their own submission.
-     * @deny (create) A student tries to write feedback on another student's submission.
-     * @principle Grants write access to course owner (instructor) and read access to resource owner (student).
-     */
-    match /courses/{courseId}/modules/{moduleId}/assignments/{assignmentId}/submissions/{submissionId}/feedback/{feedbackId} {
-      allow get: if isSubmissionOwner(resource.data) || isCourseInstructor(resource.data);
-      allow list: if isSubmissionOwner(get(/databases/$(database)/documents/courses/$(courseId)/modules/$(moduleId)/assignments/$(assignmentId)/submissions/$(submissionId)).data) || isCourseInstructor(get(/databases/$(database)/documents/courses/$(courseId)).data);
-      allow create, update, delete: if isCourseInstructor(resource.data);
+      /**
+       * @description Feedback can be written by instructors and read by the student who owns the submission.
+       * @path /courses/{courseId}/modules/{moduleId}/assignments/{assignmentId}/submissions/{submissionId}/feedback/{feedbackId}
+       * @allow (get) A student reads feedback on their own submission.
+       * @deny (create) A student tries to write feedback on another student's submission.
+       * @principle Grants write access to course owner (instructor) and read access to resource owner (student).
+       */
+      match /feedback/{feedbackId} {
+        allow get: if isSubmissionOwner(resource.data) || isCourseInstructor(resource.data);
+        allow list: if isSignedIn();
+        allow create, update, delete: if isCourseInstructor(request.resource.data);
+      }
     }
   }
 }
-
-    
