@@ -2,9 +2,18 @@
 
 import { z } from 'zod';
 import { redirect } from 'next/navigation';
-import { users } from './data';
 import { generateWritingFeedback } from '@/ai/flows/generate-writing-feedback';
 import { generateGradingRubric } from '@/ai/flows/generate-grading-rubric';
+import {
+  getAuth,
+  createUserWithEmailAndPassword,
+  signInWithEmailAndPassword,
+  sendPasswordResetEmail,
+} from 'firebase/auth';
+import { initializeFirebase } from '@/firebase/index';
+
+// Initialize Firebase Admin SDK
+const { auth } = initializeFirebase();
 
 // Existing authenticate action
 export async function authenticate(
@@ -14,20 +23,28 @@ export async function authenticate(
   try {
     const email = formData.get('email') as string;
     const password = formData.get('password') as string;
-    
-    const user = users.find(u => u.email === email);
 
-    if (!user || user.password !== password) {
-      return {
-        message: 'Invalid credentials.',
-      };
-    }
-    
-    redirect(`/${user.role}/dashboard`);
+    await signInWithEmailAndPassword(auth, email, password);
+
+    // This part of the logic will be handled by a client-side redirect based on the user's role
+    // For now, we redirect to a generic dashboard.
+    // In the future, we will fetch the user's role from Firestore.
+    redirect(`/student/dashboard`);
 
   } catch (error: any) {
     if (error.message.includes('NEXT_REDIRECT')) {
       throw error;
+    }
+    if (error.code) {
+        switch (error.code) {
+            case 'auth/user-not-found':
+            case 'auth/wrong-password':
+                return { message: 'Invalid credentials.' };
+            case 'auth/invalid-email':
+                return { message: 'Invalid email address.' };
+            default:
+                return { message: 'An unknown error occurred.' };
+        }
     }
     
     return {
@@ -62,29 +79,27 @@ export async function signup(prevState: any, formData: FormData) {
 
   const { name, email, password, role } = validatedFields.data;
 
-  const existingUser = users.find(u => u.email === email);
-  if (existingUser) {
+  try {
+    const userCredential = await createUserWithEmailAndPassword(auth, email, password);
+    const user = userCredential.user;
+
+    // TODO: Save user role and other details in Firestore
+    
     return {
-      message: 'An account with this email already exists.',
+      message: 'Account created successfully! You can now sign in.',
+      success: true,
+    }
+  } catch (error: any) {
+    if (error.code === 'auth/email-already-in-use') {
+      return {
+        message: 'An account with this email already exists.',
+        success: false,
+      };
+    }
+    return {
+      message: 'Something went wrong during signup.',
       success: false,
     };
-  }
-  
-  // In a real app, you'd save to a database. Here we just add to the mock array.
-  const newUser = {
-    id: String(users.length + 1),
-    name,
-    email,
-    password,
-    role,
-    avatarUrl: '', // placeholder
-  };
-  users.push(newUser);
-
-  // redirect('/login'); // We can't redirect from here because we need to show a success message
-  return {
-    message: 'Account created successfully! You can now sign in.',
-    success: true,
   }
 }
 
@@ -109,23 +124,21 @@ export async function requestPasswordReset(prevState: any, formData: FormData) {
   }
   
   const { email } = validatedFields.data;
-  const user = users.find(u => u.email === email);
 
-  if (!user) {
-    // Don't reveal if a user does or doesn't exist
+  try {
+    await sendPasswordResetEmail(auth, email);
     return { 
         message: 'If an account with that email exists, a password reset link has been sent.',
         success: true
     };
+  } catch (error: any) {
+    // We don't want to reveal if a user exists or not for security reasons.
+    // So we return the same success message regardless of the outcome.
+     return { 
+        message: 'If an account with that email exists, a password reset link has been sent.',
+        success: true
+    };
   }
-  
-  // In a real app, you would generate a token and send an email.
-  console.log(`Password reset requested for ${email}`);
-  
-  return {
-      message: 'If an account with that email exists, a password reset link has been sent.',
-      success: true
-  };
 }
 
 

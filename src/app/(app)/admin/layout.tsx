@@ -1,21 +1,42 @@
+'use client';
+
 import Header from '@/components/layout/header';
-import { users } from '@/lib/data';
+import { useUser } from '@/firebase';
+import { useRouter } from 'next/navigation';
+import { useEffect } from 'react';
 
 export default function AdminLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
-  const adminUser = users.find(user => user.role === 'admin');
+  const { user, isUserLoading } = useUser();
+  const router = useRouter();
 
-  if (!adminUser) {
+  useEffect(() => {
+    if (!isUserLoading && !user) {
+      router.push('/login');
+    }
+  }, [user, isUserLoading, router]);
+
+
+  if (isUserLoading || !user) {
     // Or redirect to login
-    return <div>User not found</div>;
+    return <div>Loading...</div>;
+  }
+  
+  // A mock user for display purposes until we fetch roles from Firestore
+  const displayUser = {
+      id: user.uid,
+      name: user.displayName || user.email || 'Admin',
+      email: user.email || '',
+      role: 'admin', // This will be dynamic later
+      avatarUrl: user.photoURL || ''
   }
 
   return (
     <div className="flex min-h-screen w-full flex-col">
-      <Header user={adminUser} />
+      <Header user={displayUser} />
       <main className="flex flex-1 flex-col gap-4 p-4 md:gap-8 md:p-8 bg-muted/20">
         {children}
       </main>
