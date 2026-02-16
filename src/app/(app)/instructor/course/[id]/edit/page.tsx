@@ -25,10 +25,10 @@ import { Form, FormControl, FormField, FormItem, FormMessage } from '@/component
 import { Skeleton } from '@/components/ui/skeleton';
 import { useFirestore, useDoc, useCollection, useMemoFirebase } from '@/firebase';
 import { doc, collection, query, orderBy } from 'firebase/firestore';
-import { BookOpen, GripVertical, PlaySquare, FileText, CheckSquare, PlusCircle, Link as LinkIcon } from 'lucide-react';
-import { updateCourse, createModule, createContentItem } from '@/lib/actions';
+import { BookOpen, GripVertical, PlaySquare, FileText, CheckSquare, PlusCircle, Link as LinkIcon, ClipboardEdit } from 'lucide-react';
+import { updateCourse, createModule, createContentItem, createAssignment } from '@/lib/actions';
 import { useToast } from '@/hooks/use-toast';
-import type { Module, ContentItem } from '@/lib/definitions';
+import type { Module, ContentItem, Assignment } from '@/lib/definitions';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -164,6 +164,67 @@ function ContentItemsList({ courseId, moduleId }: { courseId: string; moduleId: 
   );
 }
 
+function AssignmentsList({ courseId, moduleId }: { courseId: string; moduleId: string }) {
+  const firestore = useFirestore();
+  const [isPending, startTransition] = useTransition();
+  const { toast } = useToast();
+
+  const assignmentsQuery = useMemoFirebase(() => {
+    if (!firestore) return null;
+    // Assuming assignments will be ordered by the 'order' field, similar to content items.
+    // Make sure your `createAssignment` action includes this field.
+    return query(collection(firestore, `courses/${courseId}/modules/${moduleId}/assignments`), orderBy('order'));
+  }, [firestore, courseId, moduleId]);
+
+  const { data: assignments, isLoading } = useCollection<Assignment>(assignmentsQuery);
+
+  const handleCreateAssignment = () => {
+    startTransition(async () => {
+      const result = await createAssignment(courseId, moduleId);
+      if (result?.error) {
+        toast({
+          variant: "destructive",
+          title: "Error",
+          description: result.error,
+        });
+      } else {
+        toast({
+          title: "Success",
+          description: "New assignment created.",
+        });
+      }
+    });
+  };
+
+  return (
+    <ul className="pl-8 space-y-1 py-1 border-l border-dashed ml-4 mt-2">
+      <li className="list-none text-xs font-semibold text-muted-foreground px-2 pt-2 -ml-2">ASSIGNMENTS</li>
+      {isLoading && (
+        <div className="space-y-2 py-1">
+          <Skeleton className="h-7 w-full" />
+        </div>
+      )}
+      {assignments?.map((item) => (
+        <li key={item.id} className="w-full">
+          <a
+            href="#"
+            className="flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground p-2 rounded-md"
+          >
+            <ClipboardEdit className="h-4 w-4" />
+            <span>{item.title}</span>
+          </a>
+        </li>
+      ))}
+       <li className="w-full mt-2">
+          <Button variant="ghost" size="sm" className="w-full justify-start text-muted-foreground" onClick={handleCreateAssignment} disabled={isPending}>
+            <PlusCircle className="h-4 w-4 mr-2" />
+            Add Assignment
+          </Button>
+      </li>
+    </ul>
+  );
+}
+
 export default function CourseEditPage({ params }: { params: { id: string } }) {
   const { toast } = useToast();
   const firestore = useFirestore();
@@ -251,6 +312,7 @@ export default function CourseEditPage({ params }: { params: { id: string } }) {
                     </SidebarMenuButton>
                   </div>
                   <ContentItemsList courseId={params.id} moduleId={module.id} />
+                  <AssignmentsList courseId={params.id} moduleId={module.id} />
                 </SidebarMenuItem>
               ))}
                {!areModulesLoading && modules && modules.length === 0 && (
@@ -356,3 +418,5 @@ export default function CourseEditPage({ params }: { params: { id: string } }) {
     </SidebarProvider>
   );
 }
+
+    

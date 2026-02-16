@@ -396,3 +396,37 @@ export async function createContentItem(courseId: string, moduleId: string, type
     return { error: "An unexpected error occurred while creating the content item." };
   }
 }
+
+export async function createAssignment(courseId: string, moduleId: string) {
+  if (!courseId || !moduleId) {
+    return { error: "Course ID and Module ID are required." };
+  }
+
+  const { firestore } = getFirebaseServerServices();
+  const assignmentsRef = collection(firestore, `courses/${courseId}/modules/${moduleId}/assignments`);
+
+  try {
+    // Find the current highest order number
+    const q = query(assignmentsRef, orderBy("order", "desc"), limit(1));
+    const querySnapshot = await getDocs(q);
+    const lastOrder = querySnapshot.empty ? 0 : querySnapshot.docs[0].data().order;
+    
+    await addDoc(assignmentsRef, {
+      moduleId: moduleId,
+      title: "New Assignment",
+      description: "Add assignment instructions here.",
+      deadline: new Date(new Date().setDate(new Date().getDate() + 7)).toISOString(), // Default deadline 1 week from now
+      pointsPossible: 100,
+      type: 'Writing',
+      order: lastOrder + 1,
+    });
+    
+    revalidatePath(`/instructor/course/${courseId}/edit`);
+    return { success: true };
+  } catch (error) {
+    console.error("Failed to create assignment:", error);
+    return { error: "An unexpected error occurred while creating the assignment." };
+  }
+}
+
+    

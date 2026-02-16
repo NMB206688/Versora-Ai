@@ -322,6 +322,10 @@
           "items": {
             "type": "string"
           }
+        },
+        "order": {
+          "type": "number",
+          "description": "The sequential order of the assignment within its module."
         }
       },
       "required": [

@@ -26,9 +26,14 @@ export interface Course {
 
 export interface Assignment {
   id: string;
+  moduleId: string;
   title: string;
-  course: string;
-  dueDate: string;
+  description: string;
+  deadline: string;
+  pointsPossible: number;
+  type: string;
+  learningObjectiveIds?: string[];
+  order: number;
 }
 
 export interface Feedback {
@@ -65,3 +70,5 @@ export interface Enrollment {
     enrollmentDate: string;
     completionDate?: string;
 }
+
+    

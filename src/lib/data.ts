@@ -1,4 +1,4 @@
-import type { User, Course, Assignment, Feedback, Module } from '@/lib/definitions';
+import type { User, Course, Feedback, Module } from '@/lib/definitions';
 import { PlaceHolderImages } from './placeholder-images';
 
 const courseImage1 = PlaceHolderImages.find(img => img.id === 'course-1');
@@ -53,7 +53,8 @@ export const courses = [
   },
 ];
 
-export const assignments: Assignment[] = [
+type MockAssignment = { id: string; title: string; course: string; dueDate: string };
+export const assignments: MockAssignment[] = [
   { id: '1', title: 'Data Analysis Project Proposal', course: 'Data Science 101', dueDate: '2024-09-15' },
   { id: '2', title: 'Short Story Submission', course: 'Creative Writing', dueDate: '2024-09-20' },
   { id: '3', title: 'Problem Set 5', course: 'Advanced Calculus', dueDate: '2024-09-22' },
@@ -82,3 +83,5 @@ export const adminDashboardData = {
     { service: 'Other', value: 500, fill: 'var(--color-chart-3)' },
   ],
 };
+
+    
