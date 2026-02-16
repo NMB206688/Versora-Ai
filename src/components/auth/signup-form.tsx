@@ -19,14 +19,14 @@ import {
 } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { Mail, Lock, User } from "lucide-react";
+import { Mail, Lock, User, Shield } from "lucide-react";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 
 const formSchema = z.object({
   name: z.string().min(2, { message: "Name must be at least 2 characters." }),
   email: z.string().email({ message: "Please enter a valid email address." }),
   password: z.string().min(6, { message: "Password must be at least 6 characters." }),
-  role: z.enum(["student", "instructor"], { required_error: "You need to select a role." }),
+  role: z.enum(["student", "instructor", "admin"], { required_error: "You need to select a role." }),
 });
 
 function SignupButton() {
@@ -126,6 +126,12 @@ export function SignupForm() {
                         <RadioGroupItem value="instructor" />
                       </FormControl>
                       <FormLabel className="font-normal">Instructor</FormLabel>
+                    </FormItem>
+                     <FormItem className="flex items-center space-x-2 space-y-0">
+                      <FormControl>
+                        <RadioGroupItem value="admin" />
+                      </FormControl>
+                      <FormLabel className="font-normal">Admin</FormLabel>
                     </FormItem>
                   </RadioGroup>
                 </FormControl>

@@ -11,12 +11,12 @@ import {
   sendPasswordResetEmail,
   type Auth,
 } from 'firebase/auth';
-import { getFirestore, doc, setDoc, collection, addDoc, updateDoc, getDocs, query, orderBy, limit, writeBatch, where } from 'firebase/firestore';
+import { getFirestore, doc, setDoc, collection, addDoc, updateDoc, getDocs, query, orderBy, limit, writeBatch, where, getDoc, collectionGroup } from 'firebase/firestore';
 import { initializeApp, getApps, getApp, type FirebaseApp } from 'firebase/app';
 import { firebaseConfig } from '@/firebase/config';
 import { PlaceHolderImages } from './placeholder-images';
 import { revalidatePath } from 'next/cache';
-import type { ContentItem, Rubric, RubricCriterion } from './definitions';
+import type { ContentItem, Rubric, RubricCriterion, Submission, PortfolioItem } from './definitions';
 import { generateFeedbackForSubmission } from '@/ai/flows/generate-feedback-for-submission';
 
 // Server-side Firebase initialization for both Auth and Firestore.
@@ -85,7 +85,7 @@ const SignupFormSchema = z.object({
   name: z.string().min(2, { message: "Name must be at least 2 characters." }),
   email: z.string().email({ message: "Please enter a valid email address." }),
   password: z.string().min(6, { message: "Password must be at least 6 characters." }),
-  role: z.enum(["student", "instructor"], { required_error: "You need to select a role." }),
+  role: z.enum(["student", "instructor", "admin"], { required_error: "You need to select a role." }),
 });
 
 export async function signup(prevState: any, formData: FormData) {
@@ -115,9 +115,11 @@ export async function signup(prevState: any, formData: FormData) {
     const firstName = nameParts[0] || '';
     const lastName = nameParts.slice(1).join(' ') || '';
 
+    const batch = writeBatch(firestore);
+
     // Create user profile document in Firestore
     const userDocRef = doc(firestore, 'users', user.uid);
-    await setDoc(userDocRef, {
+    batch.set(userDocRef, {
       id: user.uid,
       email: user.email,
       firstName: firstName,
@@ -126,7 +128,17 @@ export async function signup(prevState: any, formData: FormData) {
       creationDate: new Date().toISOString(),
       lastLoginDate: new Date().toISOString(),
     });
+
+    // If the role is admin, add them to the roles_admin collection for security rule checks
+    if (role === 'admin') {
+        const adminRoleRef = doc(firestore, 'roles_admin', user.uid);
+        // The data doesn't matter for the rule, only the document's existence.
+        // We add data here for easier inspection in the Firebase console.
+        batch.set(adminRoleRef, { grantedAt: new Date().toISOString() });
+    }
     
+    await batch.commit();
+
     return {
       message: 'Account created successfully! You can now sign in.',
       success: true,
@@ -318,6 +330,7 @@ export async function createCourse(prevState: any, formData: FormData) {
       creationDate: new Date().toISOString(),
       imageUrl: randomImage.imageUrl,
       imageHint: randomImage.imageHint,
+      studentMembers: {}, // Initialize student members map
     });
     
     // Redirect to the edit page for the newly created course
@@ -362,6 +375,22 @@ export async function updateCourse(courseId: string, prevState: any, formData: F
     }
 }
 
+async function getDenormalizedCourseData(courseId: string) {
+    const { firestore } = getFirebaseServerServices();
+    const courseRef = doc(firestore, 'courses', courseId);
+    const courseSnap = await getDoc(courseRef);
+    if (!courseSnap.exists()) {
+        throw new Error("Course not found for denormalization.");
+    }
+    const courseData = courseSnap.data();
+    return {
+        courseInstructorId: courseData.instructorId,
+        coursePublished: courseData.published,
+        courseStudentMembers: courseData.studentMembers || {},
+    };
+}
+
+
 export async function createModule(courseId: string) {
   if (!courseId) {
     return { error: "Course ID is required." };
@@ -371,17 +400,18 @@ export async function createModule(courseId: string) {
   const modulesRef = collection(firestore, `courses/${courseId}/modules`);
 
   try {
-    // Find the current highest order number
+    const denormalizedData = await getDenormalizedCourseData(courseId);
+
     const q = query(modulesRef, orderBy("order", "desc"), limit(1));
     const querySnapshot = await getDocs(q);
     const lastOrder = querySnapshot.empty ? 0 : querySnapshot.docs[0].data().order;
     
-    // Add the new module with the next order number
     await addDoc(modulesRef, {
       courseId: courseId,
       title: "New Module",
       description: "Add a description for your new module.",
       order: lastOrder + 1,
+      ...denormalizedData,
     });
     
     revalidatePath(`/instructor/course/${courseId}/edit`);
@@ -401,18 +431,21 @@ export async function createContentItem(courseId: string, moduleId: string, type
   const contentItemsRef = collection(firestore, `courses/${courseId}/modules/${moduleId}/contentItems`);
 
   try {
-    // Find the current highest order number
+    const denormalizedData = await getDenormalizedCourseData(courseId);
+    
     const q = query(contentItemsRef, orderBy("order", "desc"), limit(1));
     const querySnapshot = await getDocs(q);
     const lastOrder = querySnapshot.empty ? 0 : querySnapshot.docs[0].data().order;
     
-    // Add the new content item with the next order number
     await addDoc(contentItemsRef, {
       moduleId: moduleId,
       title: `New ${type.charAt(0).toUpperCase() + type.slice(1)}`,
       description: "",
       type: type,
       order: lastOrder + 1,
+      textContent: "",
+      contentUrl: "",
+      ...denormalizedData,
     });
     
     revalidatePath(`/instructor/course/${courseId}/edit`);
@@ -423,6 +456,57 @@ export async function createContentItem(courseId: string, moduleId: string, type
   }
 }
 
+const UpdateContentItemSchema = z.object({
+  title: z.string().min(1, "Title is required."),
+  description: z.string().optional(),
+  textContent: z.string().optional(),
+  contentUrl: z.string().url({ message: "Please enter a valid URL." }).optional().or(z.literal('')),
+});
+
+export async function updateContentItem(
+  courseId: string,
+  moduleId: string,
+  itemId: string,
+  prevState: any,
+  formData: FormData,
+) {
+    const validatedFields = UpdateContentItemSchema.safeParse({
+        title: formData.get('title'),
+        description: formData.get('description'),
+        textContent: formData.get('textContent'),
+        contentUrl: formData.get('contentUrl'),
+    });
+
+    if (!validatedFields.success) {
+        return {
+            errors: validatedFields.error.flatten().fieldErrors,
+            message: 'Failed to update content item.',
+            success: false,
+        };
+    }
+    
+    const { firestore } = getFirebaseServerServices();
+    const itemRef = doc(firestore, `courses/${courseId}/modules/${moduleId}/contentItems`, itemId);
+
+    try {
+        // Use validated data, but clean up empty strings for URL
+        const dataToUpdate = {
+            ...validatedFields.data,
+            contentUrl: validatedFields.data.contentUrl === '' ? undefined : validatedFields.data.contentUrl,
+        };
+
+        await updateDoc(itemRef, dataToUpdate);
+
+        revalidatePath(`/instructor/course/${courseId}/edit`);
+        revalidatePath(`/student/course/${courseId}`); // Revalidate student page too
+        return { message: 'Content item updated successfully.', success: true, errors: {} };
+    } catch (error) {
+        console.error('Failed to update content item:', error);
+        return { message: 'An unexpected error occurred.', success: false };
+    }
+}
+
+
 export async function createAssignment(courseId: string, moduleId: string) {
   if (!courseId || !moduleId) {
     return { error: "Course ID and Module ID are required." };
@@ -432,12 +516,14 @@ export async function createAssignment(courseId: string, moduleId: string) {
   const assignmentsRef = collection(firestore, `courses/${courseId}/modules/${moduleId}/assignments`);
 
   try {
-    // Find the current highest order number
+    const denormalizedData = await getDenormalizedCourseData(courseId);
+
     const q = query(assignmentsRef, orderBy("order", "desc"), limit(1));
     const querySnapshot = await getDocs(q);
     const lastOrder = querySnapshot.empty ? 0 : querySnapshot.docs[0].data().order;
     
     await addDoc(assignmentsRef, {
+      courseId: courseId,
       moduleId: moduleId,
       title: "New Assignment",
       description: "Add assignment instructions here.",
@@ -445,6 +531,7 @@ export async function createAssignment(courseId: string, moduleId: string) {
       pointsPossible: 100,
       type: 'Writing',
       order: lastOrder + 1,
+      ...denormalizedData,
     });
     
     revalidatePath(`/instructor/course/${courseId}/edit`);
@@ -529,6 +616,8 @@ export async function saveRubric(
   
   const batch = writeBatch(firestore);
 
+  const denormalizedData = await getDenormalizedCourseData(courseId);
+
   // 1. Create the main rubric document
   const rubricDoc: Omit<Rubric, 'id'> = {
       assignmentId: assignmentId,
@@ -536,6 +625,7 @@ export async function saveRubric(
       creationDate: new Date().toISOString(),
       status: 'Approved',
       aiGenerated: true,
+      ...denormalizedData,
   };
   batch.set(rubricRef, rubricDoc);
 
@@ -549,6 +639,8 @@ export async function saveRubric(
           maxPoints: criterion.maxPoints,
           levels: criterion.levels,
           order: index + 1,
+          rubricStatus: 'Approved',
+          ...denormalizedData,
       };
       batch.set(criterionDocRef, newCriterion);
   });
@@ -585,6 +677,24 @@ export async function submitAssignment(
   }
 
   try {
+    const courseRef = doc(firestore, 'courses', courseId);
+    const assignmentRef = doc(firestore, `courses/${courseId}/modules/${moduleId}/assignments/${assignmentId}`);
+    
+    const [courseSnap, assignmentSnap] = await Promise.all([
+        getDoc(courseRef),
+        getDoc(assignmentRef)
+    ]);
+    
+    if (!courseSnap.exists()) {
+        return { success: false, message: 'This course does not exist.' };
+    }
+    if (!assignmentSnap.exists()) {
+        return { success: false, message: 'This assignment does not exist.' };
+    }
+    const courseTitle = courseSnap.data().title;
+    const assignmentTitle = assignmentSnap.data().title;
+    const denormalizedData = await getDenormalizedCourseData(courseId);
+
     const submissionsRef = collection(firestore, `courses/${courseId}/modules/${moduleId}/assignments/${assignmentId}/submissions`);
 
     // Check if the user has already submitted
@@ -596,13 +706,20 @@ export async function submitAssignment(
 
     await addDoc(submissionsRef, {
       assignmentId,
+      courseId,
+      moduleId,
+      assignmentTitle,
+      courseTitle,
       studentId,
       studentName,
+      submissionStudentId: studentId,
       submissionDate: new Date().toISOString(),
       textContent: submissionText,
+      ...denormalizedData,
     });
 
     revalidatePath(`/student/course/${courseId}/module/${moduleId}/assignment/${assignmentId}`);
+    revalidatePath(`/student/dashboard`);
 
     return { success: true, message: 'Your assignment has been submitted successfully.' };
   } catch (error) {
@@ -624,7 +741,6 @@ export async function saveGradeAndFeedback(
   const grade = formData.get('grade') as string;
   const feedbackContent = formData.get('feedback') as string;
 
-  // Basic validation
   if (!userId) {
     return { success: false, message: 'Authentication error: User not found.' };
   }
@@ -640,6 +756,10 @@ export async function saveGradeAndFeedback(
   const feedbackRef = doc(collection(submissionRef, 'feedback'));
 
   const batch = writeBatch(firestore);
+  
+  const denormalizedData = await getDenormalizedCourseData(courseId);
+  const submissionSnap = await getDoc(submissionRef);
+  const submissionData = submissionSnap.data();
 
   // Update submission with grade
   batch.update(submissionRef, { grade: numericGrade });
@@ -652,12 +772,16 @@ export async function saveGradeAndFeedback(
       content: feedbackContent,
       creationDate: new Date().toISOString(),
       type: 'General',
+      submissionStudentId: submissionData?.studentId,
+      ...denormalizedData,
   });
 
   try {
     await batch.commit();
     revalidatePath(`/instructor/course/${courseId}/module/${moduleId}/assignment/${assignmentId}`);
     revalidatePath(`/instructor/course/${courseId}/module/${moduleId}/assignment/${assignmentId}/grade/${submissionId}`);
+    revalidatePath(`/student/dashboard`);
+    revalidatePath(`/student/course/${courseId}/module/${moduleId}/assignment/${assignmentId}`);
     return { success: true, message: 'Grade and feedback saved successfully.' };
   } catch (error) {
     console.error('Failed to save grade and feedback:', error);
@@ -680,7 +804,6 @@ export async function getAIAssistedFeedback(
 
   try {
     // The AI flow expects a specific structure, so we map our criteria to it.
-    // This is defensive coding in case the structures diverge slightly.
     const aiRubricCriteria = rubricCriteria.map(c => ({
         description: c.description,
         maxPoints: c.maxPoints,
@@ -695,7 +818,6 @@ export async function getAIAssistedFeedback(
     
     await logAICost(userId, 'Gemini', 'AI Assisted Feedback', 0.003);
 
-    // Format the feedback items into a single string for the textarea
     const feedbackText = result.feedbackItems
       .map(item => `[${item.type}]\n${item.content}`)
       .join('\n\n');
@@ -708,4 +830,169 @@ export async function getAIAssistedFeedback(
     console.error(e);
     return { feedbackText: '', suggestedGrade: null, message: 'Failed to generate AI feedback.' };
   }
+}
+
+export async function addSubmissionToPortfolio(
+  submission: Submission,
+  prevState: any,
+  formData: FormData,
+) {
+    const reflection = formData.get('reflection') as string;
+
+    if (!submission || !submission.studentId) {
+        return { success: false, message: 'Invalid submission data.'};
+    }
+    if (!reflection || reflection.trim().length < 10) {
+        return { success: false, message: 'Please provide a meaningful reflection of at least 10 characters.'};
+    }
+
+    const { firestore } = getFirebaseServerServices();
+    const studentId = submission.studentId;
+    const batch = writeBatch(firestore);
+
+    try {
+        const portfolioRef = doc(firestore, 'users', studentId, 'portfolio', 'main');
+        const portfolioSnap = await getDoc(portfolioRef);
+
+        if (!portfolioSnap.exists()) {
+            batch.set(portfolioRef, {
+                studentId: studentId,
+                title: `${submission.studentName}'s Learning Portfolio`,
+                description: 'A collection of my best work and learning journey.',
+                creationDate: new Date().toISOString(),
+                lastUpdateDate: new Date().toISOString(),
+            });
+        } else {
+            batch.update(portfolioRef, { lastUpdateDate: new Date().toISOString() });
+        }
+
+        const portfolioItemRef = doc(collection(firestore, `users/${studentId}/portfolio/main/items`));
+        
+        const portfolioItem: Omit<PortfolioItem, 'id'> = {
+            portfolioId: 'main',
+            studentId: studentId,
+            submissionId: submission.id,
+            reflection: reflection,
+            addedDate: new Date().toISOString(),
+            assignmentTitle: submission.assignmentTitle,
+            courseTitle: submission.courseTitle,
+            grade: submission.grade ?? 0,
+            submissionExcerpt: submission.textContent ? submission.textContent.substring(0, 250) + '...' : '',
+        };
+        batch.set(portfolioItemRef, portfolioItem);
+
+        await batch.commit();
+        revalidatePath('/student/portfolio');
+        return { success: true, message: 'Successfully added to your portfolio!'};
+
+    } catch (error) {
+        console.error('Failed to add to portfolio:', error);
+        return { success: false, message: 'An unexpected error occurred.' };
+    }
+}
+
+async function updateChildren(
+    batch: any, 
+    parentRef: any,
+    updateData: any,
+    subcollections: string[]
+) {
+    for (const subcollection of subcollections) {
+        const snapshot = await getDocs(collection(parentRef, subcollection));
+        for (const doc of snapshot.docs) {
+            batch.update(doc.ref, updateData);
+            // Recursive call for nested subcollections if necessary
+            if (subcollection === 'modules') {
+                await updateChildren(batch, doc.ref, updateData, ['contentItems', 'assignments']);
+            }
+             if (subcollection === 'assignments') {
+                await updateChildren(batch, doc.ref, updateData, ['submissions', 'rubric']);
+            }
+        }
+    }
+}
+
+export async function toggleCoursePublished(courseId: string, currentStatus: boolean, instructorId: string) {
+    const { firestore } = getFirebaseServerServices();
+    const courseRef = doc(firestore, 'courses', courseId);
+
+    const courseSnap = await getDoc(courseRef);
+    if (!courseSnap.exists() || courseSnap.data().instructorId !== instructorId) {
+        return { success: false, message: 'Permission denied.' };
+    }
+
+    const newStatus = !currentStatus;
+    const batch = writeBatch(firestore);
+
+    // 1. Update the course itself
+    batch.update(courseRef, { published: newStatus });
+
+    // 2. Update all descendant documents
+    const updateData = { coursePublished: newStatus };
+    await updateChildren(batch, courseRef, updateData, ['modules', 'learningObjectives', 'assignments', 'contentItems']);
+
+    try {
+        await batch.commit();
+        revalidatePath(`/instructor/course/${courseId}/edit`);
+        revalidatePath(`/student/courses`);
+        return { success: true, message: `Course ${newStatus ? 'published' : 'unpublished'} successfully.` };
+    } catch (error) {
+        console.error('Failed to toggle course publish state:', error);
+        return { success: false, message: 'An unexpected error occurred.' };
+    }
+}
+
+export async function enrollInCourse(courseId: string, studentId: string, studentName: string) {
+    if (!courseId || !studentId) {
+        return { success: false, message: 'User and course must be specified.' };
+    }
+
+    const { firestore } = getFirebaseServerServices();
+    const batch = writeBatch(firestore);
+
+    try {
+        // 1. Check if enrollment already exists
+        const enrollmentQuery = query(collection(firestore, 'enrollments'), where('courseId', '==', courseId), where('studentId', '==', studentId), limit(1));
+        const existingEnrollment = await getDocs(enrollmentQuery);
+        if (!existingEnrollment.empty) {
+            return { success: false, message: 'You are already enrolled in this course.' };
+        }
+
+        const courseRef = doc(firestore, 'courses', courseId);
+        const courseSnap = await getDoc(courseRef);
+        if (!courseSnap.exists()) {
+            return { success: false, message: 'Course not found.' };
+        }
+        const courseData = courseSnap.data();
+
+        // 2. Create the new enrollment document
+        const enrollmentRef = doc(collection(firestore, 'enrollments'));
+        batch.set(enrollmentRef, {
+            courseId,
+            studentId,
+            enrollmentDate: new Date().toISOString(),
+            courseInstructorId: courseData.instructorId,
+        });
+
+        // 3. Update the studentMembers map on the course and all its children
+        const studentMembersUpdate = { [`studentMembers.${studentId}`]: true };
+
+        batch.update(courseRef, studentMembersUpdate);
+
+        const collectionsToUpdate = ['modules', 'assignments', 'contentItems', 'learningObjectives'];
+        for (const coll of collectionsToUpdate) {
+            const querySnapshot = await getDocs(collection(courseRef, coll));
+            querySnapshot.forEach(doc => {
+                batch.update(doc.ref, studentMembersUpdate);
+            });
+        }
+        
+        await batch.commit();
+        revalidatePath('/student/dashboard');
+        revalidatePath(`/student/courses`);
+        return { success: true, message: 'Successfully enrolled in course!' };
+    } catch (error) {
+        console.error('Failed to enroll in course:', error);
+        return { success: false, message: 'An unexpected error occurred during enrollment.' };
+    }
 }
