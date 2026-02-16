@@ -11,7 +11,7 @@ import {
   sendPasswordResetEmail,
   type Auth,
 } from 'firebase/auth';
-import { getFirestore, doc, setDoc, collection, addDoc, updateDoc } from 'firebase/firestore';
+import { getFirestore, doc, setDoc, collection, addDoc, updateDoc, getDocs, query, orderBy, limit } from 'firebase/firestore';
 import { initializeApp, getApps, getApp, type FirebaseApp } from 'firebase/app';
 import { firebaseConfig } from '@/firebase/config';
 import { PlaceHolderImages } from './placeholder-images';
@@ -335,4 +335,32 @@ export async function updateCourse(courseId: string, prevState: any, formData: F
     }
 }
 
+export async function createModule(courseId: string) {
+  if (!courseId) {
+    return { error: "Course ID is required." };
+  }
+
+  const { firestore } = getFirebaseServerServices();
+  const modulesRef = collection(firestore, `courses/${courseId}/modules`);
+
+  try {
+    // Find the current highest order number
+    const q = query(modulesRef, orderBy("order", "desc"), limit(1));
+    const querySnapshot = await getDocs(q);
+    const lastOrder = querySnapshot.empty ? 0 : querySnapshot.docs[0].data().order;
     
+    // Add the new module with the next order number
+    await addDoc(modulesRef, {
+      courseId: courseId,
+      title: "New Module",
+      description: "Add a description for your new module.",
+      order: lastOrder + 1,
+    });
+    
+    revalidatePath(`/instructor/course/${courseId}/edit`);
+    return { success: true };
+  } catch (error) {
+    console.error("Failed to create module:", error);
+    return { error: "An unexpected error occurred while creating the module." };
+  }
+}

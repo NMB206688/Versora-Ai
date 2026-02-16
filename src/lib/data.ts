@@ -14,7 +14,7 @@ export const users: User[] = [
   { id: '4', name: 'Student1', email: 'student1@gmail.com', role: 'student', password: '123456', avatarUrl: userAvatar?.imageUrl || '' },
 ];
 
-export const courses: Course[] = [
+export const courses = [
   { 
     id: 'ds101', 
     title: 'Introduction to Data Science', 
@@ -62,36 +62,6 @@ export const assignments: Assignment[] = [
 export const recentFeedback: Feedback[] = [
   { id: '1', assignmentTitle: 'Essay 1: Initial Draft', course: 'Creative Writing', feedbackSummary: 'Good start, but focus on strengthening your thesis statement.', date: '2024-08-28' },
   { id: '2', assignmentTitle: 'Lab 2: Data Cleaning', course: 'Data Science 101', feedbackSummary: 'Excellent use of Python libraries. Some optimizations are possible.', date: '2024-08-25' },
-];
-
-export const courseModules: Module[] = [
-  {
-    id: 'm1',
-    title: 'Module 1: Getting Started',
-    lessons: [
-      { id: 'l1-1', title: 'Course Introduction', type: 'video' },
-      { id: 'l1-2', title: 'What is Data Science?', type: 'reading' },
-      { id: 'l1-3', title: 'Knowledge Check 1', type: 'quiz' },
-    ]
-  },
-  {
-    id: 'm2',
-    title: 'Module 2: Python Fundamentals',
-    lessons: [
-      { id: 'l2-1', title: 'Variables and Data Types', type: 'video' },
-      { id: 'l2-2', title: 'Control Flow', type: 'reading' },
-      { id: 'l2-3', title: 'Functions', type: 'video' },
-      { id: 'l2-4', title: 'Knowledge Check 2', type: 'quiz' },
-    ]
-  },
-  {
-    id: 'm3',
-    title: 'Module 3: Data Analysis with Pandas',
-    lessons: [
-      { id: 'l3-1', title: 'Introduction to Pandas', type: 'video' },
-      { id: 'l3-2', title: 'DataFrames and Series', type: 'reading' },
-    ]
-  },
 ];
 
 export const adminDashboardData = {

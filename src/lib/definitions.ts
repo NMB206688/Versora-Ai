@@ -7,6 +7,8 @@ export interface User {
   role: UserRole;
   avatarUrl: string;
   password?: string;
+  firstName?: string;
+  lastName?: string;
 }
 
 export interface Course {
@@ -30,7 +32,7 @@ export interface Assignment {
 }
 
 export interface Feedback {
-  id: string;
+  id: '1';
   assignmentTitle: string;
   course: string;
   feedbackSummary: string;
@@ -39,8 +41,10 @@ export interface Feedback {
 
 export interface Module {
   id: string;
+  courseId: string;
   title: string;
-  lessons: Lesson[];
+  description: string;
+  order: number;
 }
 
 export interface Lesson {
