@@ -1,6 +1,6 @@
 'use client';
 
-import { useActionState, useEffect, useTransition } from 'react';
+import { useActionState, useEffect, useTransition, useState } from 'react';
 import { useFormStatus } from 'react-dom';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -22,14 +22,22 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
-import { Form, FormControl, FormField, FormItem, FormMessage } from '@/components/ui/form';
+import { Form, FormControl, FormField, FormItem, FormMessage, FormLabel } from '@/components/ui/form';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useFirestore, useDoc, useCollection, useMemoFirebase } from '@/firebase';
 import { doc, collection, query, orderBy } from 'firebase/firestore';
 import { BookOpen, GripVertical, PlaySquare, FileText, CheckSquare, PlusCircle, Link as LinkIcon, ClipboardEdit } from 'lucide-react';
-import { updateCourse, createModule, createContentItem, createAssignment } from '@/lib/actions';
+import { updateCourse, createModule, createContentItem, createAssignment, updateContentItem } from '@/lib/actions';
 import { useToast } from '@/hooks/use-toast';
 import type { Module, ContentItem, Assignment } from '@/lib/definitions';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -80,10 +88,162 @@ function CreateModuleButton({ courseId }: { courseId: string }) {
   );
 }
 
+const UpdateContentItemSchema = z.object({
+    title: z.string().min(1, "Title is required."),
+    description: z.string().optional(),
+    textContent: z.string().optional(),
+    contentUrl: z.string().url({ message: "Please enter a valid URL." }).optional().or(z.literal('')),
+});
+type UpdateContentItemForm = z.infer<typeof UpdateContentItemSchema>;
+
+function EditContentItemDialog({
+  isOpen,
+  setIsOpen,
+  item,
+  courseId,
+  moduleId
+}: {
+  isOpen: boolean;
+  setIsOpen: (open: boolean) => void;
+  item: ContentItem | null;
+  courseId: string;
+  moduleId: string;
+}) {
+    const { toast } = useToast();
+    const [state, formAction] = useActionState(updateContentItem.bind(null, courseId, moduleId, item?.id ?? ''), {
+      errors: {},
+      message: '',
+      success: false,
+    });
+
+    const form = useForm<UpdateContentItemForm>({
+        resolver: zodResolver(UpdateContentItemSchema),
+        defaultValues: {
+            title: '',
+            description: '',
+            textContent: '',
+            contentUrl: ''
+        },
+    });
+
+    useEffect(() => {
+        if (item) {
+            form.reset({
+                title: item.title || '',
+                description: item.description || '',
+                textContent: item.textContent || '',
+                contentUrl: item.contentUrl || '',
+            });
+        }
+    }, [item, form]);
+
+    useEffect(() => {
+        if (state?.message) {
+            toast({
+                title: state.success ? "Success" : "Error",
+                description: state.message,
+                variant: state.success ? "default" : "destructive",
+            });
+            if (state.success) {
+                setIsOpen(false);
+            }
+        }
+    }, [state, toast, setIsOpen]);
+
+    if (!item) return null;
+
+    return (
+        <Dialog open={isOpen} onOpenChange={setIsOpen}>
+            <DialogContent className="sm:max-w-xl">
+                 <Form {...form}>
+                    <form action={formAction} className="space-y-6">
+                        <DialogHeader>
+                            <DialogTitle className="font-headline text-2xl">Edit {item.type}</DialogTitle>
+                            <DialogDescription>
+                                Make changes to your content item. Click save when you're done.
+                            </DialogDescription>
+                        </DialogHeader>
+                        
+                        <div className="space-y-4 py-4">
+                            <FormField
+                                control={form.control}
+                                name="title"
+                                render={({ field }) => (
+                                <FormItem>
+                                    <FormLabel>Title</FormLabel>
+                                    <FormControl>
+                                        <Input placeholder="Content item title" {...field} />
+                                    </FormControl>
+                                    <FormMessage />
+                                </FormItem>
+                                )}
+                            />
+                            <FormField
+                                control={form.control}
+                                name="description"
+                                render={({ field }) => (
+                                <FormItem>
+                                    <FormLabel>Description (optional)</FormLabel>
+                                    <FormControl>
+                                        <Textarea placeholder="A short description of this content item" {...field} />
+                                    </FormControl>
+                                    <FormMessage />
+                                </FormItem>
+                                )}
+                            />
+
+                            {(item.type === 'reading' || item.type === 'document') && (
+                                <FormField
+                                    control={form.control}
+                                    name="textContent"
+                                    render={({ field }) => (
+                                    <FormItem>
+                                        <FormLabel>Content</FormLabel>
+                                        <FormControl>
+                                        <Textarea placeholder="Enter the text for this reading." className="min-h-48" {...field} />
+                                        </FormControl>
+                                        <FormMessage />
+                                    </FormItem>
+                                    )}
+                                />
+                            )}
+
+                             {(item.type === 'video' || item.type === 'link') && (
+                                <FormField
+                                    control={form.control}
+                                    name="contentUrl"
+                                    render={({ field }) => (
+                                    <FormItem>
+                                        <FormLabel>URL</FormLabel>
+                                        <FormControl>
+                                            <Input placeholder="https://example.com" {...field} />
+                                        </FormControl>
+                                        <FormMessage />
+                                    </FormItem>
+                                    )}
+                                />
+                            )}
+                        </div>
+
+                        <DialogFooter>
+                            <Button type="button" variant="outline" onClick={() => setIsOpen(false)}>Cancel</Button>
+                            <SubmitButton />
+                        </DialogFooter>
+                    </form>
+                 </Form>
+            </DialogContent>
+        </Dialog>
+    )
+}
+
+
 function ContentItemsList({ courseId, moduleId }: { courseId: string; moduleId: string }) {
   const firestore = useFirestore();
   const [isPending, startTransition] = useTransition();
   const { toast } = useToast();
+  
+  const [selectedItem, setSelectedItem] = useState<ContentItem | null>(null);
+  const [isDialogOpen, setIsDialogOpen] = useState(false);
 
   const contentItemsQuery = useMemoFirebase(() => {
     if (!firestore) return null;
@@ -91,6 +251,11 @@ function ContentItemsList({ courseId, moduleId }: { courseId: string; moduleId: 
   }, [firestore, courseId, moduleId]);
 
   const { data: contentItems, isLoading } = useCollection<ContentItem>(contentItemsQuery);
+
+  const handleItemClick = (item: ContentItem) => {
+    setSelectedItem(item);
+    setIsDialogOpen(true);
+  };
 
   const handleCreateContentItem = (type: ContentItem['type']) => {
     startTransition(async () => {
@@ -119,49 +284,58 @@ function ContentItemsList({ courseId, moduleId }: { courseId: string; moduleId: 
   };
 
   return (
-    <ul className="pl-8 space-y-1 py-1 border-l border-dashed ml-4">
-      {isLoading && (
-        <div className="space-y-2 py-1">
-          <Skeleton className="h-7 w-full" />
-          <Skeleton className="h-7 w-full" />
-        </div>
-      )}
-      {contentItems?.map((item) => (
-        <li key={item.id} className="w-full">
-          <a
-            href="#"
-            className="flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground p-2 rounded-md"
-          >
-            {itemIcons[item.type] || <FileText className="h-4 w-4" />}
-            <span>{item.title}</span>
-          </a>
+    <>
+      <ul className="pl-8 space-y-1 py-1 border-l border-dashed ml-4">
+        {isLoading && (
+          <div className="space-y-2 py-1">
+            <Skeleton className="h-7 w-full" />
+            <Skeleton className="h-7 w-full" />
+          </div>
+        )}
+        {contentItems?.map((item) => (
+          <li key={item.id} className="w-full">
+            <button
+              onClick={() => handleItemClick(item)}
+              className="flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground p-2 rounded-md w-full text-left"
+            >
+              {itemIcons[item.type] || <FileText className="h-4 w-4" />}
+              <span>{item.title}</span>
+            </button>
+          </li>
+        ))}
+        <li className="w-full mt-2">
+          <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                  <Button variant="ghost" size="sm" className="w-full justify-start text-muted-foreground" disabled={isPending}>
+                    <PlusCircle className="h-4 w-4 mr-2" />
+                    Add Content Item
+                  </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent>
+                  <DropdownMenuItem onClick={() => handleCreateContentItem('reading')}>
+                      <FileText className="mr-2 h-4 w-4" /> Reading
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => handleCreateContentItem('video')}>
+                      <PlaySquare className="mr-2 h-4 w-4" /> Video
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => handleCreateContentItem('quiz')}>
+                      <CheckSquare className="mr-2 h-4 w-4" /> Quiz
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => handleCreateContentItem('link')}>
+                      <LinkIcon className="mr-2 h-4 w-4" /> Link
+                  </DropdownMenuItem>
+              </DropdownMenuContent>
+          </DropdownMenu>
         </li>
-      ))}
-       <li className="w-full mt-2">
-         <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-                <Button variant="ghost" size="sm" className="w-full justify-start text-muted-foreground" disabled={isPending}>
-                  <PlusCircle className="h-4 w-4 mr-2" />
-                  Add Content Item
-                </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent>
-                <DropdownMenuItem onClick={() => handleCreateContentItem('reading')}>
-                    <FileText className="mr-2 h-4 w-4" /> Reading
-                </DropdownMenuItem>
-                <DropdownMenuItem onClick={() => handleCreateContentItem('video')}>
-                    <PlaySquare className="mr-2 h-4 w-4" /> Video
-                </DropdownMenuItem>
-                 <DropdownMenuItem onClick={() => handleCreateContentItem('quiz')}>
-                    <CheckSquare className="mr-2 h-4 w-4" /> Quiz
-                </DropdownMenuItem>
-                 <DropdownMenuItem onClick={() => handleCreateContentItem('link')}>
-                    <LinkIcon className="mr-2 h-4 w-4" /> Link
-                </DropdownMenuItem>
-            </DropdownMenuContent>
-         </DropdownMenu>
-      </li>
-    </ul>
+      </ul>
+      <EditContentItemDialog 
+        isOpen={isDialogOpen}
+        setIsOpen={setIsDialogOpen}
+        item={selectedItem}
+        courseId={courseId}
+        moduleId={moduleId}
+      />
+    </>
   );
 }
 
@@ -172,8 +346,6 @@ function AssignmentsList({ courseId, moduleId }: { courseId: string; moduleId: s
 
   const assignmentsQuery = useMemoFirebase(() => {
     if (!firestore) return null;
-    // Assuming assignments will be ordered by the 'order' field, similar to content items.
-    // Make sure your `createAssignment` action includes this field.
     return query(collection(firestore, `courses/${courseId}/modules/${moduleId}/assignments`), orderBy('order'));
   }, [firestore, courseId, moduleId]);
 

@@ -17,6 +17,7 @@ import { firebaseConfig } from '@/firebase/config';
 import { PlaceHolderImages } from './placeholder-images';
 import { revalidatePath } from 'next/cache';
 import type { ContentItem, Rubric, RubricCriterion } from './definitions';
+import { generateFeedbackForSubmission } from '@/ai/flows/generate-feedback-for-submission';
 
 // Server-side Firebase initialization for both Auth and Firestore.
 function getFirebaseServerServices() {
@@ -412,6 +413,9 @@ export async function createContentItem(courseId: string, moduleId: string, type
       description: "",
       type: type,
       order: lastOrder + 1,
+      // Initialize content fields
+      textContent: "",
+      contentUrl: "",
     });
     
     revalidatePath(`/instructor/course/${courseId}/edit`);
@@ -421,6 +425,57 @@ export async function createContentItem(courseId: string, moduleId: string, type
     return { error: "An unexpected error occurred while creating the content item." };
   }
 }
+
+const UpdateContentItemSchema = z.object({
+  title: z.string().min(1, "Title is required."),
+  description: z.string().optional(),
+  textContent: z.string().optional(),
+  contentUrl: z.string().url({ message: "Please enter a valid URL." }).optional().or(z.literal('')),
+});
+
+export async function updateContentItem(
+  courseId: string,
+  moduleId: string,
+  itemId: string,
+  prevState: any,
+  formData: FormData,
+) {
+    const validatedFields = UpdateContentItemSchema.safeParse({
+        title: formData.get('title'),
+        description: formData.get('description'),
+        textContent: formData.get('textContent'),
+        contentUrl: formData.get('contentUrl'),
+    });
+
+    if (!validatedFields.success) {
+        return {
+            errors: validatedFields.error.flatten().fieldErrors,
+            message: 'Failed to update content item.',
+            success: false,
+        };
+    }
+    
+    const { firestore } = getFirebaseServerServices();
+    const itemRef = doc(firestore, `courses/${courseId}/modules/${moduleId}/contentItems`, itemId);
+
+    try {
+        // Use validated data, but clean up empty strings for URL
+        const dataToUpdate = {
+            ...validatedFields.data,
+            contentUrl: validatedFields.data.contentUrl === '' ? undefined : validatedFields.data.contentUrl,
+        };
+
+        await updateDoc(itemRef, dataToUpdate);
+
+        revalidatePath(`/instructor/course/${courseId}/edit`);
+        revalidatePath(`/student/course/${courseId}`); // Revalidate student page too
+        return { message: 'Content item updated successfully.', success: true, errors: {} };
+    } catch (error) {
+        console.error('Failed to update content item:', error);
+        return { message: 'An unexpected error occurred.', success: false };
+    }
+}
+
 
 export async function createAssignment(courseId: string, moduleId: string) {
   if (!courseId || !moduleId) {
@@ -569,13 +624,14 @@ export async function submitAssignment(
   moduleId: string,
   assignmentId: string,
   studentId: string,
+  studentName: string,
   prevState: any,
   formData: FormData,
 ) {
   const { firestore } = getFirebaseServerServices();
   const submissionText = formData.get('textContent') as string;
 
-  if (!studentId) {
+  if (!studentId || !studentName) {
     return { success: false, message: 'You must be logged in to submit an assignment.' };
   }
   if (!submissionText || submissionText.trim().length < 10) {
@@ -595,6 +651,7 @@ export async function submitAssignment(
     await addDoc(submissionsRef, {
       assignmentId,
       studentId,
+      studentName,
       submissionDate: new Date().toISOString(),
       textContent: submissionText,
     });
@@ -605,5 +662,104 @@ export async function submitAssignment(
   } catch (error) {
     console.error('Failed to submit assignment:', error);
     return { success: false, message: 'An unexpected error occurred while submitting.' };
+  }
+}
+
+export async function saveGradeAndFeedback(
+  courseId: string,
+  moduleId: string,
+  assignmentId: string,
+  submissionId: string,
+  userId: string,
+  prevState: any,
+  formData: FormData,
+) {
+  const { firestore } = getFirebaseServerServices();
+  const grade = formData.get('grade') as string;
+  const feedbackContent = formData.get('feedback') as string;
+
+  // Basic validation
+  if (!userId) {
+    return { success: false, message: 'Authentication error: User not found.' };
+  }
+  const numericGrade = parseFloat(grade);
+  if (isNaN(numericGrade) || numericGrade < 0) {
+    return { success: false, message: 'Please enter a valid, non-negative grade.' };
+  }
+  if (!feedbackContent || feedbackContent.trim().length < 5) {
+      return { success: false, message: 'Please provide meaningful feedback (at least 5 characters).' };
+  }
+
+  const submissionRef = doc(firestore, 'courses', courseId, 'modules', moduleId, 'assignments', assignmentId, 'submissions', submissionId);
+  const feedbackRef = doc(collection(submissionRef, 'feedback'));
+
+  const batch = writeBatch(firestore);
+
+  // Update submission with grade
+  batch.update(submissionRef, { grade: numericGrade });
+
+  // Create new feedback document
+  batch.set(feedbackRef, {
+      submissionId: submissionId,
+      giverId: userId,
+      aiGenerated: false,
+      content: feedbackContent,
+      creationDate: new Date().toISOString(),
+      type: 'General',
+  });
+
+  try {
+    await batch.commit();
+    revalidatePath(`/instructor/course/${courseId}/module/${moduleId}/assignment/${assignmentId}`);
+    revalidatePath(`/instructor/course/${courseId}/module/${moduleId}/assignment/${assignmentId}/grade/${submissionId}`);
+    return { success: true, message: 'Grade and feedback saved successfully.' };
+  } catch (error) {
+    console.error('Failed to save grade and feedback:', error);
+    return { success: false, message: 'An unexpected error occurred while saving.' };
+  }
+}
+
+export async function getAIAssistedFeedback(
+  { submissionText, assignmentDescription, rubricCriteria, userId }: {
+    submissionText: string;
+    assignmentDescription: string;
+    rubricCriteria: RubricCriterion[];
+    userId: string;
+  }
+): Promise<{ feedbackText: string; suggestedGrade: number | null; message?: string }> {
+  
+  if (!submissionText || !assignmentDescription || !rubricCriteria) {
+    return { feedbackText: '', suggestedGrade: null, message: 'Missing required data for AI feedback.' };
+  }
+
+  try {
+    // The AI flow expects a specific structure, so we map our criteria to it.
+    // This is defensive coding in case the structures diverge slightly.
+    const aiRubricCriteria = rubricCriteria.map(c => ({
+        description: c.description,
+        maxPoints: c.maxPoints,
+        levels: c.levels.map(l => ({ levelName: l.levelName, description: l.description })),
+    }));
+      
+    const result = await generateFeedbackForSubmission({
+        submissionText,
+        assignmentDescription,
+        rubricCriteria: aiRubricCriteria,
+    });
+    
+    await logAICost(userId, 'Gemini', 'AI Assisted Feedback', 0.003);
+
+    // Format the feedback items into a single string for the textarea
+    const feedbackText = result.feedbackItems
+      .map(item => `[${item.type}]\n${item.content}`)
+      .join('\n\n');
+      
+    return { 
+      feedbackText, 
+      suggestedGrade: result.suggestedGrade ?? null,
+    };
+  } catch (e) {
+    console.error(e);
+    return { feedbackText: '', suggestedGrade: null, message: 'Failed to generate AI feedback.' };
   }
 }
