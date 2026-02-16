@@ -223,17 +223,17 @@ export async function getWritingFeedback(prevState: any, formData: FormData) {
   if (!validatedFields.success) {
     return {
       errors: validatedFields.error.flatten().fieldErrors,
-      feedback: null,
+      feedbackItems: null,
     };
   }
   
   try {
     const result = await generateWritingFeedback({ text: validatedFields.data.text });
     await logAICost(userId, 'Gemini', 'Writing Feedback', 0.002);
-    return { feedback: result.feedback, errors: {} };
+    return { feedbackItems: result.feedbackItems, errors: {} };
   } catch (e) {
     console.error(e);
-    return { feedback: "Failed to generate feedback. Please try again.", errors: {} };
+    return { feedbackItems: null, message: "Failed to generate feedback. Please try again.", errors: {} };
   }
 }
 

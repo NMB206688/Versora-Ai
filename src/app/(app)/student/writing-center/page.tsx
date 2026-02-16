@@ -6,14 +6,16 @@ import { getWritingFeedback } from '@/lib/actions';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Textarea } from '@/components/ui/textarea';
-import { Sparkles, FileText, Bot } from 'lucide-react';
+import { Sparkles, FileText, Bot, MessageCircle, Network, Quote, SpellCheck, Info } from 'lucide-react';
 import { Form, FormControl, FormField, FormItem, FormMessage } from '@/components/ui/form';
 import { useForm } from 'react-hook-form';
 import { useUser } from '@/firebase';
+import { Alert, AlertDescription } from '@/components/ui/alert';
 
 const initialState = {
-  feedback: null,
+  feedbackItems: null,
   errors: {},
+  message: '',
 };
 
 function SubmitButton() {
@@ -25,6 +27,14 @@ function SubmitButton() {
     </Button>
   );
 }
+
+const feedbackIcons: Record<string, React.ReactNode> = {
+  Clarity: <MessageCircle />,
+  Structure: <Network />,
+  Citation: <Quote />,
+  Grammar: <SpellCheck />,
+  General: <Info />,
+};
 
 export default function WritingCenterPage() {
   const [state, dispatch] = useActionState(getWritingFeedback, initialState);
@@ -72,6 +82,11 @@ export default function WritingCenterPage() {
                     )}
                   />
                   <SubmitButton />
+                   {state?.message && (
+                    <Alert variant="destructive" className="mt-4">
+                        <AlertDescription>{state.message}</AlertDescription>
+                    </Alert>
+                )}
                 </form>
               </Form>
             </CardContent>
@@ -86,18 +101,29 @@ export default function WritingCenterPage() {
                 <CardTitle className="font-headline text-2xl">AI Feedback</CardTitle>
               </div>
             </CardHeader>
-            <CardContent className="min-h-[400px]">
+            <CardContent className="min-h-[468px]">
               {useFormStatus().pending ? (
                 <div className="flex flex-col items-center justify-center h-full space-y-4">
                   <Sparkles className="h-10 w-10 text-accent animate-pulse" />
                   <p className="text-muted-foreground">Generating feedback...</p>
                 </div>
-              ) : state.feedback ? (
-                <div className="prose prose-sm dark:prose-invert max-w-none whitespace-pre-wrap font-sans">
-                  {state.feedback}
+              ) : state.feedbackItems && state.feedbackItems.length > 0 ? (
+                <div className="space-y-4">
+                  {state.feedbackItems.map((item, index) => (
+                    <div key={index} className="flex items-start gap-4">
+                      <div className="bg-primary/10 text-primary p-2 rounded-full mt-1">
+                        {feedbackIcons[item.type] || <Info />}
+                      </div>
+                      <div>
+                        <h4 className="font-semibold">{item.type}</h4>
+                        <p className="text-muted-foreground text-sm">{item.content}</p>
+                      </div>
+                    </div>
+                  ))}
                 </div>
               ) : (
                 <div className="flex flex-col items-center justify-center h-full text-center">
+                   <Bot className="h-12 w-12 text-muted-foreground/50 mb-4" />
                   <p className="text-muted-foreground">Your feedback will appear here.</p>
                 </div>
               )}
@@ -108,5 +134,3 @@ export default function WritingCenterPage() {
     </div>
   );
 }
-
-    
