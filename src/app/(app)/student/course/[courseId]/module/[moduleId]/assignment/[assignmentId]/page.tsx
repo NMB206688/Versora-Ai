@@ -9,9 +9,9 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { Skeleton } from '@/components/ui/skeleton';
-import { ArrowLeft, BookOpen, CheckCircle } from 'lucide-react';
+import { ArrowLeft, BookOpen, CheckCircle, MessageSquare } from 'lucide-react';
 import { format } from 'date-fns';
-import type { Assignment, Rubric, RubricCriterion, Submission } from '@/lib/definitions';
+import type { Assignment, Rubric, RubricCriterion, Submission, Feedback } from '@/lib/definitions';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { submitAssignment } from '@/lib/actions';
 import { useToast } from '@/hooks/use-toast';
@@ -93,6 +93,43 @@ function SubmitButton() {
   );
 }
 
+function FeedbackSection({ courseId, moduleId, assignmentId, submissionId }: { courseId: string; moduleId: string; assignmentId: string; submissionId: string }) {
+    const firestore = useFirestore();
+
+    const feedbackQuery = useMemoFirebase(() => {
+        if (!firestore) return null;
+        return query(collection(firestore, 'courses', courseId, 'modules', moduleId, 'assignments', assignmentId, 'submissions', submissionId, 'feedback'), orderBy('creationDate'));
+    }, [firestore, courseId, moduleId, assignmentId, submissionId]);
+
+    const { data: feedback, isLoading } = useCollection<Feedback>(feedbackQuery);
+
+    if (isLoading) {
+        return <Card className="shadow-lg mt-8"><CardHeader><Skeleton className="h-6 w-48" /></CardHeader><CardContent><Skeleton className="h-20 w-full" /></CardContent></Card>;
+    }
+
+    if (!feedback || feedback.length === 0) {
+        return null; // Don't show the card if there's no feedback
+    }
+
+    return (
+        <Card className="shadow-lg mt-8">
+            <CardHeader>
+                <CardTitle className="font-headline text-2xl flex items-center gap-2">
+                    <MessageSquare className="h-6 w-6" />
+                    Instructor Feedback
+                </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+                {feedback.map((item) => (
+                    <div key={item.id} className="p-4 border rounded-lg bg-background">
+                        <p className="text-muted-foreground">{item.content}</p>
+                        <p className="text-xs text-muted-foreground mt-2">— Graded on {format(new Date(item.creationDate), 'PPP')}</p>
+                    </div>
+                ))}
+            </CardContent>
+        </Card>
+    );
+}
 
 export default function StudentAssignmentPage({ params }: { params: { courseId: string, moduleId: string, assignmentId: string } }) {
     const firestore = useFirestore();
@@ -210,8 +247,11 @@ export default function StudentAssignmentPage({ params }: { params: { courseId: 
                                      <div className="space-y-4">
                                          <Alert variant="default" className="border-green-500 bg-green-50 text-green-800">
                                             <CheckCircle className="h-4 w-4 !text-green-600" />
-                                            <AlertDescription>
-                                                Submitted on {format(new Date(submission.submissionDate), 'PPP')}
+                                            <AlertDescription className="flex justify-between items-center">
+                                                <span>Submitted on {format(new Date(submission.submissionDate), 'PPP')}</span>
+                                                {submission.grade !== undefined && (
+                                                    <span className="font-bold text-lg">Grade: {submission.grade} / {assignment?.pointsPossible}</span>
+                                                )}
                                             </AlertDescription>
                                         </Alert>
                                         <div className="prose prose-stone dark:prose-invert max-w-none text-muted-foreground whitespace-pre-wrap p-4 bg-muted/50 rounded-md border">
@@ -234,6 +274,14 @@ export default function StudentAssignmentPage({ params }: { params: { courseId: 
                                  )}
                         </CardContent>
                      </Card>
+                     {submission && (
+                        <FeedbackSection
+                            courseId={params.courseId}
+                            moduleId={params.moduleId}
+                            assignmentId={params.assignmentId}
+                            submissionId={submission.id}
+                        />
+                     )}
                 </div>
                 <div className="lg:col-span-1">
                     {/* Rubric Card */}
@@ -254,5 +302,3 @@ export default function StudentAssignmentPage({ params }: { params: { courseId: 
         </div>
     );
 }
-
-    
