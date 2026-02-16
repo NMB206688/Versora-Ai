@@ -261,10 +261,10 @@ export async function createRubric(prevState: any, formData: FormData) {
     try {
         const result = await generateGradingRubric(validatedFields.data);
         await logAICost(userId, 'Gemini', 'Rubric Generation', 0.005);
-        return { rubric: result.rubric, errors: {} };
+        return { rubric: result, errors: {} };
     } catch (e) {
         console.error(e);
-        return { rubric: "Failed to generate rubric. Please try again.", errors: {} };
+        return { rubric: null, message: "Failed to generate rubric. Please try again.", errors: {} };
     }
 }
 
@@ -428,5 +428,3 @@ export async function createAssignment(courseId: string, moduleId: string) {
     return { error: "An unexpected error occurred while creating the assignment." };
   }
 }
-
-    

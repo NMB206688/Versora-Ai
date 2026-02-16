@@ -10,8 +10,18 @@ import { Label } from '@/components/ui/label';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Sparkles, ClipboardCheck, Check, X, Pencil } from 'lucide-react';
 import { useUser } from '@/firebase';
+import type { GenerateGradingRubricOutput } from '@/ai/flows/generate-grading-rubric';
 
-const initialState = {
+interface RubricGeneratorState {
+  rubric: GenerateGradingRubricOutput | null;
+  errors?: {
+    assignmentPrompt?: string[];
+    learningObjectives?: string[];
+  };
+  message?: string;
+}
+
+const initialState: RubricGeneratorState = {
   rubric: null,
   errors: {},
 };
@@ -76,6 +86,11 @@ export default function RubricGeneratorPage() {
                   )}
                 </div>
                 <GenerateButton />
+                 {state?.message && (
+                    <Alert variant="destructive" className="mt-4">
+                        <AlertDescription>{state.message}</AlertDescription>
+                    </Alert>
+                )}
               </form>
             </CardContent>
           </Card>
@@ -98,15 +113,30 @@ export default function RubricGeneratorPage() {
                   )}
               </div>
             </CardHeader>
-            <CardContent className="min-h-[420px] bg-muted/30 rounded-lg p-4">
+            <CardContent className="min-h-[420px] max-h-[60vh] overflow-y-auto bg-muted/30 rounded-lg p-4">
               {useFormStatus().pending ? (
                 <div className="flex flex-col items-center justify-center h-full space-y-4">
                   <Sparkles className="h-10 w-10 text-accent animate-pulse" />
                   <p className="text-muted-foreground">AI is generating your rubric...</p>
                 </div>
-              ) : state.rubric ? (
-                <div className="prose prose-sm dark:prose-invert max-w-none whitespace-pre-wrap font-sans">
-                  {state.rubric}
+              ) : state.rubric && state.rubric.criteria ? (
+                <div className="space-y-4">
+                    {state.rubric.criteria.map((criterion, index) => (
+                        <div key={index} className="border bg-background rounded-lg shadow-sm">
+                            <div className="p-4 border-b">
+                                <h4 className="font-bold text-base">{criterion.description}</h4>
+                                <p className="text-sm text-muted-foreground">Max Points: {criterion.maxPoints}</p>
+                            </div>
+                            <div className="p-4 grid gap-3">
+                                {criterion.levels.map((level, levelIndex) => (
+                                    <div key={levelIndex} className="grid grid-cols-[100px_1fr] items-start gap-x-4">
+                                        <span className="font-semibold text-sm text-foreground/80 pt-px">{level.levelName}</span>
+                                        <p className="text-sm text-muted-foreground">{level.description}</p>
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+                    ))}
                 </div>
               ) : (
                 <div className="flex flex-col items-center justify-center h-full text-center">
@@ -121,5 +151,3 @@ export default function RubricGeneratorPage() {
     </div>
   );
 }
-
-    
