@@ -12,7 +12,6 @@ import {
 } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
-import { assignments, recentFeedback } from '@/lib/data';
 import { ArrowRight, CalendarClock, MessageSquare, PlayCircle } from 'lucide-react';
 import { useUser, useFirestore, useCollection, useMemoFirebase } from '@/firebase';
 import { collection, query, where, documentId } from 'firebase/firestore';
@@ -120,20 +119,9 @@ export default function StudentDashboard() {
             </div>
           </CardHeader>
           <CardContent>
-            <ul className="space-y-4">
-              {assignments.map((assignment) => (
-                <li key={assignment.id} className="flex items-start gap-4">
-                  <div className="flex-shrink-0 w-12 h-12 rounded-lg bg-secondary flex flex-col items-center justify-center">
-                    <span className="text-sm font-bold">{new Date(assignment.dueDate).toLocaleString('default', { month: 'short' })}</span>
-                    <span className="text-xl font-bold">{new Date(assignment.dueDate).getDate()}</span>
-                  </div>
-                  <div>
-                    <p className="font-semibold">{assignment.title}</p>
-                    <p className="text-sm text-muted-foreground">{assignment.course}</p>
-                  </div>
-                </li>
-              ))}
-            </ul>
+            <div className="flex h-full min-h-[150px] items-center justify-center text-center text-sm text-muted-foreground">
+                <p>Your upcoming deadlines will appear here.</p>
+            </div>
           </CardContent>
         </Card>
 
@@ -146,15 +134,9 @@ export default function StudentDashboard() {
             </div>
           </CardHeader>
           <CardContent>
-            <ul className="space-y-4">
-              {recentFeedback.map((feedback) => (
-                <li key={feedback.id} className="border-l-4 border-primary pl-4 py-1">
-                    <p className="font-semibold">{feedback.assignmentTitle}</p>
-                    <p className="text-sm text-muted-foreground italic">"{feedback.feedbackSummary}"</p>
-                    <p className="text-xs text-muted-foreground mt-1">{feedback.date}</p>
-                </li>
-              ))}
-            </ul>
+            <div className="flex h-full min-h-[150px] items-center justify-center text-center text-sm text-muted-foreground">
+                <p>Your recent feedback will appear here.</p>
+            </div>
           </CardContent>
         </Card>
       </div>

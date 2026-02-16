@@ -1,69 +1,3 @@
-import type { User, Course, Feedback, Module } from '@/lib/definitions';
-import { PlaceHolderImages } from './placeholder-images';
-
-const courseImage1 = PlaceHolderImages.find(img => img.id === 'course-1');
-const courseImage2 = PlaceHolderImages.find(img => img.id === 'course-2');
-const courseImage3 = PlaceHolderImages.find(img => img.id === 'course-3');
-const courseImage4 = PlaceHolderImages.find(img => img.id === 'course-4');
-const userAvatar = PlaceHolderImages.find(img => img.id === 'user-avatar-1');
-
-export const users: User[] = [
-  { id: '1', name: 'Alex Johnson', email: 'student@versora.ai', role: 'student', password: 'password123', avatarUrl: userAvatar?.imageUrl || '' },
-  { id: '2', name: 'Dr. Emily Carter', email: 'instructor@versora.ai', role: 'instructor', password: 'password123', avatarUrl: userAvatar?.imageUrl || '' },
-  { id: '3', name: 'Admin User', email: 'admin@versora.ai', role: 'admin', password: 'password123', avatarUrl: userAvatar?.imageUrl || '' },
-  { id: '4', name: 'Student1', email: 'student1@gmail.com', role: 'student', password: '123456', avatarUrl: userAvatar?.imageUrl || '' },
-];
-
-export const courses = [
-  { 
-    id: 'ds101', 
-    title: 'Introduction to Data Science', 
-    description: 'Learn the fundamentals of data analysis and visualization.', 
-    instructor: 'Dr. Emily Carter', 
-    imageUrl: courseImage1?.imageUrl || '',
-    imageHint: courseImage1?.imageHint || '',
-    progress: 65,
-  },
-  { 
-    id: 'cw202', 
-    title: 'Creative Writing Workshop', 
-    description: 'Hone your storytelling skills and find your unique voice.', 
-    instructor: 'Prof. Mark Twain', 
-    imageUrl: courseImage2?.imageUrl || '',
-    imageHint: courseImage2?.imageHint || '',
-    progress: 30,
-  },
-  { 
-    id: 'ma301', 
-    title: 'Advanced Calculus', 
-    description: 'Explore multi-variable calculus and differential equations.', 
-    instructor: 'Dr. Ada Lovelace', 
-    imageUrl: courseImage3?.imageUrl || '',
-    imageHint: courseImage3?.imageHint || '',
-    progress: 80,
-  },
-  { 
-    id: 'wd101', 
-    title: 'Web Development Bootcamp', 
-    description: 'Master the MERN stack and build full-stack applications.', 
-    instructor: 'Dr. Emily Carter',
-    imageUrl: courseImage4?.imageUrl || '',
-    imageHint: courseImage4?.imageHint || '',
-    progress: 15,
-  },
-];
-
-type MockAssignment = { id: string; title: string; course: string; dueDate: string };
-export const assignments: MockAssignment[] = [
-  { id: '1', title: 'Data Analysis Project Proposal', course: 'Data Science 101', dueDate: '2024-09-15' },
-  { id: '2', title: 'Short Story Submission', course: 'Creative Writing', dueDate: '2024-09-20' },
-  { id: '3', title: 'Problem Set 5', course: 'Advanced Calculus', dueDate: '2024-09-22' },
-];
-
-export const recentFeedback: Feedback[] = [
-  { id: '1', assignmentTitle: 'Essay 1: Initial Draft', course: 'Creative Writing', feedbackSummary: 'Good start, but focus on strengthening your thesis statement.', date: '2024-08-28' },
-  { id: '2', assignmentTitle: 'Lab 2: Data Cleaning', course: 'Data Science 101', feedbackSummary: 'Excellent use of Python libraries. Some optimizations are possible.', date: '2024-08-25' },
-];
 
 export const adminDashboardData = {
   totalMonthlyCost: 12500,
@@ -83,5 +17,3 @@ export const adminDashboardData = {
     { service: 'Other', value: 500, fill: 'var(--color-chart-3)' },
   ],
 };
-
-    

@@ -36,14 +36,6 @@ export interface Assignment {
   order: number;
 }
 
-export interface Feedback {
-  id: '1';
-  assignmentTitle: string;
-  course: string;
-  feedbackSummary: string;
-  date: string;
-}
-
 export interface Module {
   id: string;
   courseId: string;
@@ -70,5 +62,3 @@ export interface Enrollment {
     enrollmentDate: string;
     completionDate?: string;
 }
-
-    
