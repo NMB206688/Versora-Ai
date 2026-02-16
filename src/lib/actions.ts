@@ -138,6 +138,7 @@ export async function signup(prevState: any, formData: FormData) {
         success: false,
       };
     }
+    console.error("Signup Error:", error);
     return {
       message: 'Something went wrong during signup.',
       success: false,

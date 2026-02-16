@@ -50,6 +50,7 @@ export default function TestingGuidePage() {
               <AlertDescription>
                 <p><strong>Email:</strong> admin@gmail.com</p>
                 <p><strong>Password:</strong> Admin@123</p>
+                <p className="text-xs mt-2 italic">Note: Admin users must be created manually in the Firebase Console.</p>
               </AlertDescription>
             </Alert>
           </CardContent>
