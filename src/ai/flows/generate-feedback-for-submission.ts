@@ -22,7 +22,7 @@ const RubricCriterionSchemaForAI = z.object({
 });
 
 
-export const GenerateFeedbackForSubmissionInputSchema = z.object({
+const GenerateFeedbackForSubmissionInputSchema = z.object({
   submissionText: z.string().describe("The student's submitted text."),
   assignmentDescription: z.string().describe("The original description/prompt for the assignment."),
   rubricCriteria: z.array(RubricCriterionSchemaForAI).describe("The criteria from the grading rubric."),
@@ -35,7 +35,7 @@ const FeedbackItemSchema = z.object({
     content: z.string().describe("The specific feedback text for this category."),
 });
 
-export const GenerateFeedbackForSubmissionOutputSchema = z.object({
+const GenerateFeedbackForSubmissionOutputSchema = z.object({
   feedbackItems: z.array(FeedbackItemSchema).describe('An array of feedback items, categorized by type.'),
   suggestedGrade: z.number().optional().describe('An optional suggested grade based on the rubric and submission.'),
 });
