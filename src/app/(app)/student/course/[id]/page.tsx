@@ -89,7 +89,7 @@ function AssignmentsList({ courseId, moduleId }: { courseId: string; moduleId: s
         {assignments.map((item) => (
           <li key={item.id}>
             <Link
-              href="#"
+              href={`/student/course/${courseId}/module/${moduleId}/assignment/${item.id}`}
               className="flex items-center gap-3 p-2 rounded-md hover:bg-muted"
             >
               <ClipboardEdit className="h-4 w-4 text-primary" />

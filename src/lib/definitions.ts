@@ -83,3 +83,13 @@ export interface RubricCriterion {
   }[];
   order: number;
 }
+
+export interface Submission {
+  id: string;
+  assignmentId: string;
+  studentId: string;
+  submissionDate: string;
+  contentUrl?: string;
+  textContent?: string;
+  grade?: number;
+}
