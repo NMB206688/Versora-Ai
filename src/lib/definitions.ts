@@ -26,6 +26,7 @@ export interface Course {
 
 export interface Assignment {
   id: string;
+  courseId: string;
   moduleId: string;
   title: string;
   description: string;
@@ -87,6 +88,9 @@ export interface RubricCriterion {
 export interface Submission {
   id: string;
   assignmentId: string;
+  courseId: string;
+  moduleId: string;
+  assignmentTitle: string;
   studentId: string;
   studentName: string;
   submissionDate: string;
@@ -104,4 +108,6 @@ export interface Feedback {
   creationDate: string;
   type: 'Clarity' | 'Structure' | 'Citation' | 'Grammar' | 'General';
 }
+    
+
     

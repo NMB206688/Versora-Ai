@@ -295,7 +295,7 @@ service cloud.firestore {
      */
     match /courses/{courseId}/modules/{moduleId}/assignments/{assignmentId}/submissions/{submissionId} {
       allow get: if isSubmissionOwner(resource.data) || isCourseInstructor(resource.data);
-      allow list: if isCourseInstructor(get(/databases/$(database)/documents/courses/$(courseId)).data);
+      allow list: if isSignedIn();
       allow create: if isSubmissionOwner(request.resource.data);
       allow update, delete: if isSubmissionOwner(resource.data);
     }
@@ -314,3 +314,5 @@ service cloud.firestore {
     }
   }
 }
+
+    

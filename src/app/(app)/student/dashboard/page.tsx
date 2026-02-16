@@ -14,10 +14,11 @@ import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
 import { ArrowRight, CalendarClock, MessageSquare, PlayCircle } from 'lucide-react';
 import { useUser, useFirestore, useCollection, useMemoFirebase } from '@/firebase';
-import { collection, query, where, documentId } from 'firebase/firestore';
+import { collection, query, where, documentId, collectionGroup, orderBy, limit } from 'firebase/firestore';
 import { useMemo } from 'react';
-import type { Course, Enrollment } from '@/lib/definitions';
+import type { Course, Enrollment, Assignment, Submission } from '@/lib/definitions';
 import { Skeleton } from '@/components/ui/skeleton';
+import { format } from 'date-fns';
 
 export default function StudentDashboard() {
   const { user, profile } = useUser();
@@ -45,8 +46,35 @@ export default function StudentDashboard() {
   }, [firestore, enrolledCourseIds]);
 
   const { data: studentCourses, isLoading: isLoadingCourses } = useCollection<Course>(coursesQuery);
+
+  // 4. Get upcoming assignments across all enrolled courses
+  const upcomingAssignmentsQuery = useMemoFirebase(() => {
+    if (!firestore || enrolledCourseIds.length === 0) return null;
+    return query(
+      collectionGroup(firestore, 'assignments'),
+      where('courseId', 'in', enrolledCourseIds),
+      where('deadline', '>', new Date().toISOString()),
+      orderBy('deadline', 'asc'),
+      limit(5)
+    );
+  }, [firestore, enrolledCourseIds]);
+
+  const { data: upcomingAssignments, isLoading: isLoadingAssignments } = useCollection<Assignment>(upcomingAssignmentsQuery);
+
+  // 5. Get recent submissions by the current user
+  const recentSubmissionsQuery = useMemoFirebase(() => {
+    if (!firestore || !user) return null;
+    return query(
+        collectionGroup(firestore, 'submissions'),
+        where('studentId', '==', user.uid),
+        orderBy('submissionDate', 'desc'),
+        limit(3)
+    );
+  }, [firestore, user]);
+
+  const { data: recentSubmissions, isLoading: isLoadingSubmissions } = useCollection<Submission>(recentSubmissionsQuery);
   
-  const isLoading = isLoadingEnrollments || isLoadingCourses;
+  const isLoading = isLoadingEnrollments || isLoadingCourses || isLoadingAssignments || isLoadingSubmissions;
   const continueLearningCourse = studentCourses?.[0]; // Use the first enrolled course
   const firstName = profile?.firstName || 'Student';
 
@@ -119,24 +147,65 @@ export default function StudentDashboard() {
             </div>
           </CardHeader>
           <CardContent>
-            <div className="flex h-full min-h-[150px] items-center justify-center text-center text-sm text-muted-foreground">
-                <p>Your upcoming deadlines will appear here.</p>
-            </div>
+            {isLoading ? (
+                <div className="space-y-4"><Skeleton className="h-6 w-full" /><Skeleton className="h-6 w-full" /></div>
+            ) : upcomingAssignments && upcomingAssignments.length > 0 ? (
+                <ul className="space-y-4">
+                    {upcomingAssignments.map(assignment => (
+                    <li key={assignment.id}>
+                        <Link href={`/student/course/${assignment.courseId}/module/${assignment.moduleId}/assignment/${assignment.id}`} className="block hover:bg-muted p-2 rounded-md">
+                        <p className="font-semibold hover:underline">{assignment.title}</p>
+                        <p className="text-sm text-muted-foreground">Due: {format(new Date(assignment.deadline), 'PP')}</p>
+                        </Link>
+                    </li>
+                    ))}
+                </ul>
+            ) : (
+                <div className="flex h-full min-h-[150px] items-center justify-center text-center text-sm text-muted-foreground">
+                    <p>No upcoming deadlines. You're all caught up!</p>
+                </div>
+            )}
           </CardContent>
         </Card>
 
-        {/* Recent Feedback */}
+        {/* Recent Activity */}
         <Card className="shadow-lg">
           <CardHeader>
             <div className="flex items-center gap-2 text-muted-foreground">
                 <MessageSquare className="h-5 w-5" />
-                <CardTitle className="font-headline text-lg">Recent Feedback</CardTitle>
+                <CardTitle className="font-headline text-lg">Recent Activity</CardTitle>
             </div>
           </CardHeader>
           <CardContent>
-            <div className="flex h-full min-h-[150px] items-center justify-center text-center text-sm text-muted-foreground">
-                <p>Your recent feedback will appear here.</p>
-            </div>
+             {isLoading ? (
+                <div className="space-y-4"><Skeleton className="h-6 w-full" /><Skeleton className="h-6 w-full" /></div>
+            ) : recentSubmissions && recentSubmissions.length > 0 ? (
+                 <ul className="space-y-2">
+                    {recentSubmissions.map(submission => (
+                    <li key={submission.id}>
+                        <Link href={`/student/course/${submission.courseId}/module/${submission.moduleId}/assignment/${submission.assignmentId}`} className="block hover:bg-muted p-2 rounded-md">
+                        <p className="font-semibold truncate">
+                            {submission.grade !== undefined 
+                            ? <span className="font-bold text-green-600">Graded: </span> 
+                            : <span className="font-bold text-primary">Submitted: </span>
+                            }
+                            {submission.assignmentTitle}
+                        </p>
+                        <p className="text-sm text-muted-foreground">
+                            {submission.grade !== undefined 
+                            ? `Grade: ${submission.grade}`
+                            : `On ${format(new Date(submission.submissionDate), 'PP')}`
+                            }
+                        </p>
+                        </Link>
+                    </li>
+                    ))}
+                </ul>
+            ) : (
+                <div className="flex h-full min-h-[150px] items-center justify-center text-center text-sm text-muted-foreground">
+                    <p>Your recent submissions and grades will appear here.</p>
+                </div>
+            )}
           </CardContent>
         </Card>
       </div>
@@ -213,3 +282,5 @@ export default function StudentDashboard() {
     </div>
   );
 }
+
+    

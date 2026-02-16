@@ -11,7 +11,7 @@ import {
   sendPasswordResetEmail,
   type Auth,
 } from 'firebase/auth';
-import { getFirestore, doc, setDoc, collection, addDoc, updateDoc, getDocs, query, orderBy, limit, writeBatch, where } from 'firebase/firestore';
+import { getFirestore, doc, setDoc, collection, addDoc, updateDoc, getDocs, query, orderBy, limit, writeBatch, where, getDoc } from 'firebase/firestore';
 import { initializeApp, getApps, getApp, type FirebaseApp } from 'firebase/app';
 import { firebaseConfig } from '@/firebase/config';
 import { PlaceHolderImages } from './placeholder-images';
@@ -492,6 +492,7 @@ export async function createAssignment(courseId: string, moduleId: string) {
     const lastOrder = querySnapshot.empty ? 0 : querySnapshot.docs[0].data().order;
     
     await addDoc(assignmentsRef, {
+      courseId: courseId,
       moduleId: moduleId,
       title: "New Assignment",
       description: "Add assignment instructions here.",
@@ -639,6 +640,14 @@ export async function submitAssignment(
   }
 
   try {
+    const assignmentRef = doc(firestore, `courses/${courseId}/modules/${moduleId}/assignments/${assignmentId}`);
+    const assignmentSnap = await getDoc(assignmentRef);
+
+    if (!assignmentSnap.exists()) {
+        return { success: false, message: 'This assignment does not exist.' };
+    }
+    const assignmentTitle = assignmentSnap.data().title;
+
     const submissionsRef = collection(firestore, `courses/${courseId}/modules/${moduleId}/assignments/${assignmentId}/submissions`);
 
     // Check if the user has already submitted
@@ -650,6 +659,9 @@ export async function submitAssignment(
 
     await addDoc(submissionsRef, {
       assignmentId,
+      courseId,
+      moduleId,
+      assignmentTitle,
       studentId,
       studentName,
       submissionDate: new Date().toISOString(),
@@ -657,6 +669,7 @@ export async function submitAssignment(
     });
 
     revalidatePath(`/student/course/${courseId}/module/${moduleId}/assignment/${assignmentId}`);
+    revalidatePath(`/student/dashboard`);
 
     return { success: true, message: 'Your assignment has been submitted successfully.' };
   } catch (error) {
@@ -712,6 +725,7 @@ export async function saveGradeAndFeedback(
     await batch.commit();
     revalidatePath(`/instructor/course/${courseId}/module/${moduleId}/assignment/${assignmentId}`);
     revalidatePath(`/instructor/course/${courseId}/module/${moduleId}/assignment/${assignmentId}/grade/${submissionId}`);
+    revalidatePath(`/student/dashboard`);
     return { success: true, message: 'Grade and feedback saved successfully.' };
   } catch (error) {
     console.error('Failed to save grade and feedback:', error);
@@ -763,3 +777,5 @@ export async function getAIAssistedFeedback(
     return { feedbackText: '', suggestedGrade: null, message: 'Failed to generate AI feedback.' };
   }
 }
+
+    
