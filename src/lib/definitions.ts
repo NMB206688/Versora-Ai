@@ -95,4 +95,13 @@ export interface Submission {
   grade?: number;
 }
 
+export interface Feedback {
+  id: string;
+  submissionId: string;
+  giverId?: string; // Optional because it can be AI
+  aiGenerated: boolean;
+  content: string;
+  creationDate: string;
+  type: 'Clarity' | 'Structure' | 'Citation' | 'Grammar' | 'General';
+}
     

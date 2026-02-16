@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { useFirestore, useDoc, useCollection, useMemoFirebase } from '@/firebase';
+import { useFirestore, useDoc, useCollection, useMemoFirebase, useUser } from '@/firebase';
 import { doc, collection, query, orderBy } from 'firebase/firestore';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -13,6 +13,10 @@ import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Textarea } from '@/components/ui/textarea';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { useActionState, useEffect } from 'react';
+import { useFormStatus } from 'react-dom';
+import { saveGradeAndFeedback } from '@/lib/actions';
+import { useToast } from '@/hooks/use-toast';
 
 // Reusable Rubric Display Component
 function RubricDisplay({ courseId, moduleId, assignmentId }: { courseId: string; moduleId: string; assignmentId: string; }) {
@@ -68,31 +72,65 @@ function RubricDisplay({ courseId, moduleId, assignmentId }: { courseId: string;
     );
 }
 
-// Grading Form (Placeholder for now, will be implemented next)
-function GradingForm({ submission }: { submission: Submission }) {
+function GradingSubmitButton() {
+    const { pending } = useFormStatus();
     return (
-        <Card className="shadow-lg">
-            <CardHeader>
-                <CardTitle className="font-headline text-xl">Grade &amp; Feedback</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-4">
-                <div className="grid grid-cols-2 gap-4 items-end">
-                    <div className="space-y-2">
-                        <Label htmlFor="grade">Grade</Label>
-                        <Input id="grade" type="number" placeholder="Enter grade" />
+        <Button type="submit" disabled={pending} className="w-full">
+            {pending ? 'Saving...' : 'Save Grade & Feedback'}
+        </Button>
+    );
+}
+
+
+function GradingForm({ submission, courseId, moduleId, assignmentId }: { submission: Submission; courseId: string; moduleId: string; assignmentId: string; }) {
+    const { user } = useUser();
+    const { toast } = useToast();
+    
+    const [state, formAction] = useActionState(
+        saveGradeAndFeedback.bind(null, courseId, moduleId, assignmentId, submission.id, user?.uid ?? ''),
+        { success: false, message: '' }
+    );
+    
+    useEffect(() => {
+        if (state.message) {
+            toast({
+                title: state.success ? 'Success' : 'Error',
+                description: state.message,
+                variant: state.success ? 'default' : 'destructive',
+            });
+        }
+    }, [state, toast]);
+    
+    return (
+        <form action={formAction}>
+            <Card className="shadow-lg">
+                <CardHeader>
+                    <CardTitle className="font-headline text-xl">Grade &amp; Feedback</CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                     {state.message && !state.success && (
+                        <Alert variant="destructive">
+                            <AlertDescription>{state.message}</AlertDescription>
+                        </Alert>
+                    )}
+                    <div className="grid grid-cols-2 gap-4 items-end">
+                        <div className="space-y-2">
+                            <Label htmlFor="grade">Grade</Label>
+                            <Input id="grade" name="grade" type="number" placeholder="Enter grade" defaultValue={submission.grade} />
+                        </div>
+                        <Button disabled className="w-full">
+                            <Edit className="mr-2 h-4 w-4" />
+                            Get AI Feedback
+                        </Button>
                     </div>
-                    <Button disabled className="w-full">
-                        <Edit className="mr-2 h-4 w-4" />
-                        Get AI Feedback
-                    </Button>
-                </div>
-                 <div className="space-y-2">
-                    <Label htmlFor="feedback">General Feedback</Label>
-                    <Textarea id="feedback" placeholder="Provide overall feedback for the student..." className="min-h-32" />
-                </div>
-                <Button disabled className="w-full">Save Grade &amp; Feedback</Button>
-            </CardContent>
-        </Card>
+                     <div className="space-y-2">
+                        <Label htmlFor="feedback">General Feedback</Label>
+                        <Textarea id="feedback" name="feedback" placeholder="Provide overall feedback for the student..." className="min-h-32" />
+                    </div>
+                    <GradingSubmitButton />
+                </CardContent>
+            </Card>
+        </form>
     );
 }
 
@@ -170,7 +208,12 @@ export default function GradeSubmissionPage({ params }: { params: { courseId: st
                     </Card>
 
                     {submission && (
-                        <GradingForm submission={submission} />
+                         <GradingForm 
+                            submission={submission} 
+                            courseId={params.courseId} 
+                            moduleId={params.moduleId} 
+                            assignmentId={params.assignmentId} 
+                        />
                     )}
                 </div>
             </div>

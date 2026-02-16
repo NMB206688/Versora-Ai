@@ -610,4 +610,56 @@ export async function submitAssignment(
   }
 }
 
-    
+export async function saveGradeAndFeedback(
+  courseId: string,
+  moduleId: string,
+  assignmentId: string,
+  submissionId: string,
+  userId: string,
+  prevState: any,
+  formData: FormData,
+) {
+  const { firestore } = getFirebaseServerServices();
+  const grade = formData.get('grade') as string;
+  const feedbackContent = formData.get('feedback') as string;
+
+  // Basic validation
+  if (!userId) {
+    return { success: false, message: 'Authentication error: User not found.' };
+  }
+  const numericGrade = parseFloat(grade);
+  if (isNaN(numericGrade) || numericGrade < 0) {
+    return { success: false, message: 'Please enter a valid, non-negative grade.' };
+  }
+  if (!feedbackContent || feedbackContent.trim().length < 5) {
+      return { success: false, message: 'Please provide meaningful feedback (at least 5 characters).' };
+  }
+
+  const submissionRef = doc(firestore, 'courses', courseId, 'modules', moduleId, 'assignments', assignmentId, 'submissions', submissionId);
+  const feedbackRef = doc(collection(submissionRef, 'feedback'));
+
+  const batch = writeBatch(firestore);
+
+  // Update submission with grade
+  batch.update(submissionRef, { grade: numericGrade });
+
+  // Create new feedback document
+  batch.set(feedbackRef, {
+      submissionId: submissionId,
+      giverId: userId,
+      aiGenerated: false,
+      content: feedbackContent,
+      creationDate: new Date().toISOString(),
+      type: 'General',
+  });
+
+  try {
+    await batch.commit();
+    revalidatePath(`/instructor/course/${courseId}/module/${moduleId}/assignment/${assignmentId}`);
+    revalidatePath(`/instructor/course/${courseId}/module/${moduleId}/assignment/${assignmentId}/grade/${submissionId}`);
+    return { success: true, message: 'Grade and feedback saved successfully.' };
+  } catch (error) {
+    console.error('Failed to save grade and feedback:', error);
+    return { success: false, message: 'An unexpected error occurred while saving.' };
+  }
+}
