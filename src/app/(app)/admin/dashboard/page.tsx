@@ -96,7 +96,7 @@ export default function AdminDashboard() {
                 <Card><CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2"><CardTitle className="text-sm font-medium">Total Monthly Cost</CardTitle><DollarSign className="h-4 w-4 text-muted-foreground" /></CardHeader><CardContent><Skeleton className="h-8 w-24" /><Skeleton className="h-4 w-32 mt-1" /></CardContent></Card>
                 <Card><CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2"><CardTitle className="text-sm font-medium">Cost Per Student</CardTitle><Users className="h-4 w-4 text-muted-foreground" /></CardHeader><CardContent><Skeleton className="h-8 w-24" /><Skeleton className="h-4 w-20 mt-1" /></CardContent></Card>
                 <Card><CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2"><CardTitle className="text-sm font-medium">Total Students</CardTitle><Users className="h-4 w-4 text-muted-foreground" /></CardHeader><CardContent><Skeleton className="h-8 w-16" /><Skeleton className="h-4 w-24 mt-1" /></CardContent></Card>
-                <Card><CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2"><CardTitle className="text-sm font-medium">AI Usage Cost</CardTitle><Bot className="h-4 w-4 text-muted-foreground" /></CardHeader><CardContent><Skeleton className="h-8 w-24" /><Skeleton className="h-4 w-24 mt-1" /></CardContent></Card>
+                <Card><CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2"><CardTitle className="text-sm font-medium">Total Courses</CardTitle><BookCopy className="h-4 w-4 text-muted-foreground" /></CardHeader><CardContent><Skeleton className="h-8 w-16" /><Skeleton className="h-4 w-24 mt-1" /></CardContent></Card>
             </div>
             <div className="grid gap-6 md:grid-cols-5 mt-6">
                 <Card className="md:col-span-3"><CardHeader><CardTitle className="font-headline text-xl">Cost Breakdown</CardTitle><CardDescription>Total vs. AI cost over the last 6 months.</CardDescription></CardHeader><CardContent><Skeleton className="h-[300px] w-full" /></CardContent></Card>
@@ -142,14 +142,14 @@ export default function AdminDashboard() {
             <p className="text-xs text-muted-foreground">{users.length} total users</p>
           </CardContent>
         </Card>
-        <Card className="shadow-lg">
+         <Card className="shadow-lg">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">AI Usage Cost</CardTitle>
-            <Bot className="h-4 w-4 text-muted-foreground" />
+            <CardTitle className="text-sm font-medium">Total Courses</CardTitle>
+            <BookCopy className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{formatCurrency(aiUsageCost)}</div>
-            <p className="text-xs text-muted-foreground">{totalMonthlyCost > 0 ? Math.round((aiUsageCost/totalMonthlyCost)*100) : 0}% of total cost</p>
+            <div className="text-2xl font-bold">{courseCount}</div>
+            <p className="text-xs text-muted-foreground">courses available</p>
           </CardContent>
         </Card>
       </div>

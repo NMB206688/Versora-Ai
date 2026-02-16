@@ -11,7 +11,6 @@ import {
   CardTitle,
 } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Progress } from '@/components/ui/progress';
 import { ArrowRight, CalendarClock, MessageSquare, PlayCircle } from 'lucide-react';
 import { useUser, useFirestore, useCollection, useMemoFirebase } from '@/firebase';
 import { collection, query, where, documentId, collectionGroup, orderBy, limit } from 'firebase/firestore';
@@ -90,7 +89,7 @@ export default function StudentDashboard() {
            {isLoading && !continueLearningCourse && (
             <>
                 <CardHeader><Skeleton className="h-5 w-32" /><Skeleton className="h-8 w-3/4 mt-2" /><Skeleton className="h-4 w-1/2 mt-1" /></CardHeader>
-                <CardContent><Skeleton className="w-full h-40 rounded-lg" /><div className="space-y-2 mt-4"><Skeleton className="h-4 w-full" /><Skeleton className="h-4 w-3/4" /></div></CardContent>
+                <CardContent><Skeleton className="w-full h-40 rounded-lg" /></CardContent>
                 <CardFooter><Skeleton className="h-10 w-full" /></CardFooter>
             </>
            )}
@@ -114,11 +113,7 @@ export default function StudentDashboard() {
                     data-ai-hint={continueLearningCourse.imageHint}
                   />
                 </div>
-                <div className="space-y-2">
-                    {/* Progress is hardcoded for now */}
-                    <Progress value={30} className="w-full" />
-                    <p className="text-sm text-muted-foreground">30% complete</p>
-                </div>
+                <p className="text-sm text-muted-foreground">Jump back in and continue your progress.</p>
               </CardContent>
               <CardFooter>
                 <Button asChild className="w-full bg-accent hover:bg-accent/90 text-accent-foreground">
@@ -133,7 +128,9 @@ export default function StudentDashboard() {
              <CardContent className="flex flex-col items-center justify-center h-full text-center py-12">
                  <h3 className="font-headline text-xl">Ready to Learn?</h3>
                  <p className="text-muted-foreground mt-2">You are not enrolled in any courses yet.</p>
-                 <Button className="mt-4">Browse Courses</Button>
+                 <Button asChild className="mt-4">
+                    <Link href="/student/courses">Browse Courses</Link>
+                </Button>
              </CardContent>
            )}
         </Card>
@@ -215,7 +212,7 @@ export default function StudentDashboard() {
         <div className="flex items-center justify-between mb-4">
             <h2 className="font-headline text-2xl font-bold">My Courses</h2>
             <Button variant="outline" asChild>
-                <Link href="#">View All</Link>
+                <Link href="/student/courses">View All</Link>
             </Button>
         </div>
         
@@ -227,8 +224,6 @@ export default function StudentDashboard() {
                     <CardContent className="p-4 space-y-2">
                       <Skeleton className="h-5 w-3/4" />
                       <Skeleton className="h-4 w-1/2" />
-                       <Skeleton className="h-4 w-full pt-2" />
-                        <Skeleton className="h-4 w-1/4" />
                     </CardContent>
                     <CardFooter className="p-4 pt-0">
                       <Skeleton className="h-10 w-full" />
@@ -256,9 +251,6 @@ export default function StudentDashboard() {
                 <CardContent className="p-4">
                     <CardTitle className="font-headline text-lg mb-1">{course.title}</CardTitle>
                     <CardDescription className="text-sm mb-2">{course.instructorName}</CardDescription>
-                    {/* Progress is hardcoded for now */}
-                    <Progress value={30} className="w-full mb-1" />
-                    <p className="text-xs text-muted-foreground">30% complete</p>
                 </CardContent>
                 <CardFooter className="p-4 pt-0">
                     <Button variant="outline" className="w-full" asChild>
@@ -274,7 +266,9 @@ export default function StudentDashboard() {
             <div className="text-center text-muted-foreground border-2 border-dashed rounded-lg py-12">
                 <h3 className="font-headline text-xl">No Courses Yet</h3>
                 <p className="mt-2">You are not enrolled in any courses. Browse the course catalog to get started.</p>
-                <Button className="mt-4">Browse Courses</Button>
+                <Button asChild className="mt-4">
+                    <Link href="/student/courses">Browse Courses</Link>
+                </Button>
             </div>
         )}
 
@@ -282,5 +276,3 @@ export default function StudentDashboard() {
     </div>
   );
 }
-
-    

@@ -12,11 +12,13 @@ import {
   CardTitle,
 } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { ArrowRight, PlusCircle, Users, ClipboardCheck } from 'lucide-react';
+import { ArrowRight, PlusCircle, Users, ClipboardCheck, Eye } from 'lucide-react';
 import { useUser, useFirestore, useCollection, useMemoFirebase } from '@/firebase';
-import { collection, query, where } from 'firebase/firestore';
+import { collection, query, where, collectionGroup, orderBy, limit } from 'firebase/firestore';
 import { Skeleton } from '@/components/ui/skeleton';
 import { createCourse } from '@/lib/actions';
+import type { Submission } from '@/lib/definitions';
+import { format } from 'date-fns';
 
 function CreateCourseButton() {
   const { pending } = useFormStatus();
@@ -37,9 +39,24 @@ export default function InstructorDashboard() {
     return query(collection(firestore, 'courses'), where('instructorId', '==', user.uid));
   }, [user, firestore]);
 
-  const { data: instructorCourses, isLoading } = useCollection(coursesQuery);
+  const recentSubmissionsQuery = useMemoFirebase(() => {
+    if (!user || !firestore) return null;
+    // This query requires a composite index on (courseInstructorId, submissionDate)
+    // Firestore will provide a link in the console error to create it automatically.
+    return query(
+      collectionGroup(firestore, 'submissions'),
+      where('courseInstructorId', '==', user.uid),
+      orderBy('submissionDate', 'desc'),
+      limit(5)
+    );
+  }, [user, firestore]);
+
+  const { data: instructorCourses, isLoading: isLoadingCourses } = useCollection(coursesQuery);
+  const { data: recentSubmissions, isLoading: isLoadingSubmissions } = useCollection<Submission>(recentSubmissionsQuery);
   
   const [state, formAction] = useActionState(createCourse, undefined);
+
+  const isLoading = isLoadingCourses || isLoadingSubmissions;
 
   return (
     <div className="container mx-auto">
@@ -75,7 +92,7 @@ export default function InstructorDashboard() {
             <CardDescription>Manage your course content and view student progress.</CardDescription>
           </CardHeader>
           <CardContent>
-            {isLoading && (
+            {isLoadingCourses && (
               <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
                 {[...Array(3)].map((_, i) => (
                   <Card key={i} className="overflow-hidden">
@@ -91,7 +108,7 @@ export default function InstructorDashboard() {
                 ))}
               </div>
             )}
-            {!isLoading && instructorCourses && instructorCourses.length > 0 && (
+            {!isLoadingCourses && instructorCourses && instructorCourses.length > 0 && (
               <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
                 {instructorCourses.map((course) => (
                   <Card key={course.id} className="overflow-hidden transition-shadow hover:shadow-xl">
@@ -110,7 +127,7 @@ export default function InstructorDashboard() {
                       <CardTitle className="font-headline text-lg mb-2">{course.title}</CardTitle>
                       <div className="flex items-center text-sm text-muted-foreground">
                           <Users className="mr-2 h-4 w-4" />
-                          <span>34 students</span>
+                          <span>{Object.keys(course.studentMembers || {}).length} students</span>
                       </div>
                     </CardContent>
                     <CardFooter className="p-4 pt-0">
@@ -124,12 +141,10 @@ export default function InstructorDashboard() {
                 ))}
               </div>
             )}
-            {!isLoading && (!instructorCourses || instructorCourses.length === 0) && (
+            {!isLoadingCourses && (!instructorCourses || instructorCourses.length === 0) && (
                 <div className="text-center text-muted-foreground py-12">
                     <p>You haven't created any courses yet.</p>
-                    <Button asChild className="mt-4">
-                        <Link href="/instructor/course/new/edit">Create Your First Course</Link>
-                    </Button>
+                    <p className="mt-2 text-sm">Click the "Create New Course" button to get started.</p>
                 </div>
             )}
           </CardContent>
@@ -141,22 +156,35 @@ export default function InstructorDashboard() {
             <CardDescription>Review the latest work from your students.</CardDescription>
           </CardHeader>
           <CardContent>
-            <ul className="space-y-4">
-                <li className="flex items-center justify-between">
-                    <div>
-                        <p className="font-semibold">Alex Johnson</p>
-                        <p className="text-sm text-muted-foreground">Submitted "Data Analysis Project Proposal" for Data Science 101</p>
-                    </div>
-                    <Button variant="outline">Grade Now</Button>
-                </li>
-                <li className="flex items-center justify-between">
-                    <div>
-                        <p className="font-semibold">Jane Doe</p>
-                        <p className="text-sm text-muted-foreground">Submitted "Final Project" for Web Development Bootcamp</p>
-                    </div>
-                    <Button variant="outline">Grade Now</Button>
-                </li>
-            </ul>
+             {isLoadingSubmissions ? (
+              <div className="space-y-4">
+                <Skeleton className="h-12 w-full" />
+                <Skeleton className="h-12 w-full" />
+              </div>
+             ) : recentSubmissions && recentSubmissions.length > 0 ? (
+                <ul className="space-y-4">
+                  {recentSubmissions.map(submission => (
+                    <li key={submission.id} className="flex items-center justify-between">
+                        <div>
+                            <p className="font-semibold">{submission.studentName}</p>
+                            <p className="text-sm text-muted-foreground">
+                              Submitted "{submission.assignmentTitle}" for {submission.courseTitle}
+                            </p>
+                        </div>
+                        <Button asChild variant="outline">
+                           <Link href={`/instructor/course/${submission.courseId}/module/${submission.moduleId}/assignment/${submission.assignmentId}/grade/${submission.id}`}>
+                              <Eye className="mr-2 h-4 w-4" />
+                              {submission.grade === undefined ? 'Grade Now' : 'View'}
+                           </Link>
+                        </Button>
+                    </li>
+                  ))}
+                </ul>
+             ) : (
+                <div className="text-center text-muted-foreground py-8">
+                  <p>No recent submissions from your students.</p>
+                </div>
+             )}
           </CardContent>
         </Card>
       </div>
