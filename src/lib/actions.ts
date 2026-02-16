@@ -182,6 +182,31 @@ export async function requestPasswordReset(prevState: any, formData: FormData) {
   }
 }
 
+async function logAICost(
+    userId: string,
+    serviceName: string,
+    featureUsed: string,
+    totalCost: number,
+) {
+    if (!userId) return;
+
+    try {
+        const { firestore } = getFirebaseServerServices();
+        await addDoc(collection(firestore, 'aiCostLogs'), {
+            timestamp: new Date().toISOString(),
+            serviceName,
+            featureUsed,
+            costPerUnit: totalCost, // simplified for now
+            unitsUsed: 1, // simplified for now
+            totalCost,
+            userId,
+        });
+    } catch (error) {
+        console.error("Failed to log AI cost:", error);
+        // We probably don't want to fail the main action if logging fails,
+        // so we'll just log the error to the server console.
+    }
+}
 
 // Existing writing feedback action
 const WritingFeedbackSchema = z.object({
@@ -192,6 +217,7 @@ export async function getWritingFeedback(prevState: any, formData: FormData) {
   const validatedFields = WritingFeedbackSchema.safeParse({
     text: formData.get('text'),
   });
+  const userId = formData.get('userId') as string;
  
   if (!validatedFields.success) {
     return {
@@ -202,6 +228,7 @@ export async function getWritingFeedback(prevState: any, formData: FormData) {
   
   try {
     const result = await generateWritingFeedback({ text: validatedFields.data.text });
+    await logAICost(userId, 'Gemini', 'Writing Feedback', 0.002);
     return { feedback: result.feedback, errors: {} };
   } catch (e) {
     console.error(e);
@@ -221,6 +248,7 @@ export async function createRubric(prevState: any, formData: FormData) {
         assignmentPrompt: formData.get('assignmentPrompt'),
         learningObjectives: formData.get('learningObjectives'),
     });
+    const userId = formData.get('userId') as string;
 
     if (!validatedFields.success) {
         return {
@@ -231,6 +259,7 @@ export async function createRubric(prevState: any, formData: FormData) {
 
     try {
         const result = await generateGradingRubric(validatedFields.data);
+        await logAICost(userId, 'Gemini', 'Rubric Generation', 0.005);
         return { rubric: result.rubric, errors: {} };
     } catch (e) {
         console.error(e);
@@ -305,3 +334,5 @@ export async function updateCourse(courseId: string, prevState: any, formData: F
         return { message: 'An unexpected error occurred while updating the course.' };
     }
 }
+
+    

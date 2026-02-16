@@ -9,6 +9,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Sparkles, ClipboardCheck, Check, X, Pencil } from 'lucide-react';
+import { useUser } from '@/firebase';
 
 const initialState = {
   rubric: null,
@@ -27,6 +28,7 @@ function GenerateButton() {
 
 export default function RubricGeneratorPage() {
   const [state, dispatch] = useActionState(createRubric, initialState);
+  const { user } = useUser();
 
   return (
     <div className="container mx-auto">
@@ -46,6 +48,7 @@ export default function RubricGeneratorPage() {
             </CardHeader>
             <CardContent>
               <form action={dispatch} className="space-y-6">
+                {user && <input type="hidden" name="userId" value={user.uid} />}
                 <div className="grid w-full gap-1.5">
                   <Label htmlFor="assignmentPrompt" className="text-lg font-semibold">Assignment Prompt</Label>
                   <Textarea
@@ -118,3 +121,5 @@ export default function RubricGeneratorPage() {
     </div>
   );
 }
+
+    

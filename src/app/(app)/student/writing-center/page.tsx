@@ -9,6 +9,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Sparkles, FileText, Bot } from 'lucide-react';
 import { Form, FormControl, FormField, FormItem, FormMessage } from '@/components/ui/form';
 import { useForm } from 'react-hook-form';
+import { useUser } from '@/firebase';
 
 const initialState = {
   feedback: null,
@@ -28,6 +29,7 @@ function SubmitButton() {
 export default function WritingCenterPage() {
   const [state, dispatch] = useActionState(getWritingFeedback, initialState);
   const form = useForm(); // For displaying form-level errors
+  const { user } = useUser();
 
   return (
     <div className="container mx-auto">
@@ -50,6 +52,7 @@ export default function WritingCenterPage() {
             <CardContent>
               <Form {...form}>
                 <form action={dispatch} className="space-y-6">
+                  {user && <input type="hidden" name="userId" value={user.uid} />}
                   <FormField
                     name="text"
                     render={({ field }) => (
@@ -105,3 +108,5 @@ export default function WritingCenterPage() {
     </div>
   );
 }
+
+    
