@@ -1,17 +1,20 @@
 'use client';
 
-import { useMemo } from 'react';
+import { useActionState, useEffect, useMemo } from 'react';
+import { useFormStatus } from 'react-dom';
 import Link from 'next/link';
 import { useFirestore, useDoc, useCollection, useMemoFirebase, useUser } from '@/firebase';
-import { doc, collection, query, orderBy } from 'firebase/firestore';
+import { doc, collection, query, orderBy, where, limit } from 'firebase/firestore';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { Skeleton } from '@/components/ui/skeleton';
-import { ArrowLeft, ClipboardList, BookOpen } from 'lucide-react';
+import { ArrowLeft, BookOpen, CheckCircle } from 'lucide-react';
 import { format } from 'date-fns';
-import type { Assignment, Rubric, RubricCriterion } from '@/lib/definitions';
+import type { Assignment, Rubric, RubricCriterion, Submission } from '@/lib/definitions';
 import { Alert, AlertDescription } from '@/components/ui/alert';
+import { submitAssignment } from '@/lib/actions';
+import { useToast } from '@/hooks/use-toast';
 
 function RubricDisplay({ courseId, moduleId, assignmentId }: { courseId: string; moduleId: string; assignmentId: string; }) {
     const firestore = useFirestore();
@@ -81,9 +84,20 @@ function RubricDisplay({ courseId, moduleId, assignmentId }: { courseId: string;
     )
 }
 
+function SubmitButton() {
+  const { pending } = useFormStatus();
+  return (
+    <Button type="submit" disabled={pending}>
+      {pending ? 'Submitting...' : 'Submit for Grading'}
+    </Button>
+  );
+}
+
 
 export default function StudentAssignmentPage({ params }: { params: { courseId: string, moduleId: string, assignmentId: string } }) {
     const firestore = useFirestore();
+    const { user } = useUser();
+    const { toast } = useToast();
 
     const assignmentRef = useMemoFirebase(() => {
         if (!firestore) return null;
@@ -92,10 +106,34 @@ export default function StudentAssignmentPage({ params }: { params: { courseId: 
 
     const { data: assignment, isLoading: isAssignmentLoading } = useDoc<Assignment>(assignmentRef);
 
-    // Placeholder for submission logic
-    // const { data: submission, isLoading: isSubmissionLoading } = useDoc(...)
+    const submissionQuery = useMemoFirebase(() => {
+        if (!firestore || !user) return null;
+        return query(
+            collection(firestore, 'courses', params.courseId, 'modules', params.moduleId, 'assignments', params.assignmentId, 'submissions'),
+            where('studentId', '==', user.uid),
+            limit(1)
+        );
+    }, [firestore, user, params.courseId, params.moduleId, params.assignmentId]);
 
-    const isLoading = isAssignmentLoading; // || isSubmissionLoading;
+    const { data: submissions, isLoading: isSubmissionLoading } = useCollection<Submission>(submissionQuery);
+    const submission = submissions?.[0];
+
+    const [state, formAction] = useActionState(
+        submitAssignment.bind(null, params.courseId, params.moduleId, params.assignmentId, user?.uid ?? ''),
+        { success: false, message: '' }
+    );
+    
+    useEffect(() => {
+        if (state.message) {
+            toast({
+                title: state.success ? 'Success' : 'Error',
+                description: state.message,
+                variant: state.success ? 'default' : 'destructive',
+            });
+        }
+    }, [state, toast]);
+
+    const isLoading = isAssignmentLoading || isSubmissionLoading;
 
     return (
         <div className="container mx-auto">
@@ -159,23 +197,39 @@ export default function StudentAssignmentPage({ params }: { params: { courseId: 
                      <Card className="shadow-lg">
                         <CardHeader>
                             <CardTitle className="font-headline text-2xl">Your Submission</CardTitle>
-                            <CardDescription>Enter your submission text below. You can save a draft or submit for grading.</CardDescription>
+                            <CardDescription>
+                                {submission ? 'Here is your submitted work.' : 'Enter your submission text below. You can only submit once.'}
+                            </CardDescription>
                         </CardHeader>
                         <CardContent>
-                            <form className="space-y-4">
-                                 {isLoading ? (
+                            {isLoading ? (
                                      <Skeleton className="h-48 w-full" />
+                                 ) : submission ? (
+                                     <div className="space-y-4">
+                                         <Alert variant="default" className="border-green-500 bg-green-50 text-green-800">
+                                            <CheckCircle className="h-4 w-4 !text-green-600" />
+                                            <AlertDescription>
+                                                Submitted on {format(new Date(submission.submissionDate), 'PPP')}
+                                            </AlertDescription>
+                                        </Alert>
+                                        <div className="prose prose-stone dark:prose-invert max-w-none text-muted-foreground whitespace-pre-wrap p-4 bg-muted/50 rounded-md border">
+                                            {submission.textContent}
+                                        </div>
+                                     </div>
                                  ) : (
-                                    <Textarea
-                                        placeholder="Begin writing your submission here..."
-                                        className="min-h-72 text-base"
-                                    />
+                                    <form action={formAction} className="space-y-4">
+                                        <Textarea
+                                            name="textContent"
+                                            placeholder="Begin writing your submission here..."
+                                            className="min-h-72 text-base"
+                                            required
+                                        />
+                                        <div className="flex justify-end gap-2">
+                                            <Button variant="outline" type="button" disabled>Save Draft</Button>
+                                            <SubmitButton />
+                                        </div>
+                                    </form>
                                  )}
-                                 <div className="flex justify-end gap-2">
-                                     <Button variant="outline" disabled>Save Draft</Button>
-                                     <Button disabled>Submit for Grading</Button>
-                                 </div>
-                            </form>
                         </CardContent>
                      </Card>
                 </div>

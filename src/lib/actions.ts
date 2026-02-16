@@ -11,7 +11,7 @@ import {
   sendPasswordResetEmail,
   type Auth,
 } from 'firebase/auth';
-import { getFirestore, doc, setDoc, collection, addDoc, updateDoc, getDocs, query, orderBy, limit, writeBatch } from 'firebase/firestore';
+import { getFirestore, doc, setDoc, collection, addDoc, updateDoc, getDocs, query, orderBy, limit, writeBatch, where } from 'firebase/firestore';
 import { initializeApp, getApps, getApp, type FirebaseApp } from 'firebase/app';
 import { firebaseConfig } from '@/firebase/config';
 import { PlaceHolderImages } from './placeholder-images';
@@ -561,5 +561,49 @@ export async function saveRubric(
   } catch (error) {
       console.error("Failed to save rubric:", error);
       return { success: false, message: 'An unexpected error occurred while saving the rubric.' };
+  }
+}
+
+export async function submitAssignment(
+  courseId: string,
+  moduleId: string,
+  assignmentId: string,
+  studentId: string,
+  prevState: any,
+  formData: FormData,
+) {
+  const { firestore } = getFirebaseServerServices();
+  const submissionText = formData.get('textContent') as string;
+
+  if (!studentId) {
+    return { success: false, message: 'You must be logged in to submit an assignment.' };
+  }
+  if (!submissionText || submissionText.trim().length < 10) {
+    return { success: false, message: 'Submission must contain at least 10 characters.' };
+  }
+
+  try {
+    const submissionsRef = collection(firestore, `courses/${courseId}/modules/${moduleId}/assignments/${assignmentId}/submissions`);
+
+    // Check if the user has already submitted
+    const q = query(submissionsRef, where("studentId", "==", studentId), limit(1));
+    const existingSubmission = await getDocs(q);
+    if (!existingSubmission.empty) {
+        return { success: false, message: 'You have already submitted this assignment.' };
+    }
+
+    await addDoc(submissionsRef, {
+      assignmentId,
+      studentId,
+      submissionDate: new Date().toISOString(),
+      textContent: submissionText,
+    });
+
+    revalidatePath(`/student/course/${courseId}/module/${moduleId}/assignment/${assignmentId}`);
+
+    return { success: true, message: 'Your assignment has been submitted successfully.' };
+  } catch (error) {
+    console.error('Failed to submit assignment:', error);
+    return { success: false, message: 'An unexpected error occurred while submitting.' };
   }
 }
