@@ -8,14 +8,14 @@ import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { ArrowLeft, BookOpen, Edit } from 'lucide-react';
 import { format } from 'date-fns';
-import type { Submission, Rubric, RubricCriterion } from '@/lib/definitions';
+import type { Submission, Rubric, RubricCriterion, Assignment } from '@/lib/definitions';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Textarea } from '@/components/ui/textarea';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { useActionState, useEffect } from 'react';
+import { useActionState, useEffect, useState, useTransition } from 'react';
 import { useFormStatus } from 'react-dom';
-import { saveGradeAndFeedback } from '@/lib/actions';
+import { saveGradeAndFeedback, getAIAssistedFeedback } from '@/lib/actions';
 import { useToast } from '@/hooks/use-toast';
 
 // Reusable Rubric Display Component
@@ -82,50 +82,95 @@ function GradingSubmitButton() {
 }
 
 
-function GradingForm({ submission, courseId, moduleId, assignmentId }: { submission: Submission; courseId: string; moduleId: string; assignmentId: string; }) {
+function GradingForm({ submission, assignment, criteria, courseId, moduleId }: { submission: Submission; assignment: Assignment, criteria: RubricCriterion[] | null; courseId: string; moduleId: string; }) {
     const { user } = useUser();
     const { toast } = useToast();
+    const [isAIPending, startAITransition] = useTransition();
+
+    // State for controlled form components
+    const [grade, setGrade] = useState<string>(submission.grade?.toString() ?? '');
+    const [feedbackText, setFeedbackText] = useState('');
     
-    const [state, formAction] = useActionState(
-        saveGradeAndFeedback.bind(null, courseId, moduleId, assignmentId, submission.id, user?.uid ?? ''),
+    const [saveState, saveFormAction] = useActionState(
+        saveGradeAndFeedback.bind(null, courseId, moduleId, assignment.id, submission.id, user?.uid ?? ''),
         { success: false, message: '' }
     );
     
     useEffect(() => {
-        if (state.message) {
+        if (saveState.message) {
             toast({
-                title: state.success ? 'Success' : 'Error',
-                description: state.message,
-                variant: state.success ? 'default' : 'destructive',
+                title: saveState.success ? 'Success' : 'Error',
+                description: saveState.message,
+                variant: saveState.success ? 'default' : 'destructive',
             });
         }
-    }, [state, toast]);
+    }, [saveState, toast]);
+
+    const handleGetAIFeedback = () => {
+        if (!user || !criteria) return;
+
+        startAITransition(async () => {
+            const result = await getAIAssistedFeedback({
+                submissionText: submission.textContent ?? '',
+                assignmentDescription: assignment.description,
+                rubricCriteria: criteria,
+                userId: user.uid,
+            });
+
+            if (result.message) {
+                 toast({ title: 'Error', description: result.message, variant: 'destructive' });
+            } else {
+                setFeedbackText(result.feedbackText);
+                if (result.suggestedGrade !== null) {
+                    setGrade(result.suggestedGrade.toString());
+                }
+                toast({
+                    title: 'AI Feedback Generated',
+                    description: 'Feedback has been added to the text area for your review.',
+                });
+            }
+        });
+    };
     
     return (
-        <form action={formAction}>
+        <form action={saveFormAction}>
             <Card className="shadow-lg">
                 <CardHeader>
                     <CardTitle className="font-headline text-xl">Grade &amp; Feedback</CardTitle>
                 </CardHeader>
                 <CardContent className="space-y-4">
-                     {state.message && !state.success && (
+                     {saveState.message && !saveState.success && (
                         <Alert variant="destructive">
-                            <AlertDescription>{state.message}</AlertDescription>
+                            <AlertDescription>{saveState.message}</AlertDescription>
                         </Alert>
                     )}
                     <div className="grid grid-cols-2 gap-4 items-end">
                         <div className="space-y-2">
                             <Label htmlFor="grade">Grade</Label>
-                            <Input id="grade" name="grade" type="number" placeholder="Enter grade" defaultValue={submission.grade} />
+                            <Input 
+                                id="grade" 
+                                name="grade" 
+                                type="number" 
+                                placeholder="Enter grade" 
+                                value={grade}
+                                onChange={(e) => setGrade(e.target.value)}
+                            />
                         </div>
-                        <Button disabled className="w-full">
+                        <Button type="button" disabled={isAIPending} className="w-full" onClick={handleGetAIFeedback}>
                             <Edit className="mr-2 h-4 w-4" />
-                            Get AI Feedback
+                            {isAIPending ? 'Getting Feedback...' : 'Get AI Feedback'}
                         </Button>
                     </div>
                      <div className="space-y-2">
                         <Label htmlFor="feedback">General Feedback</Label>
-                        <Textarea id="feedback" name="feedback" placeholder="Provide overall feedback for the student..." className="min-h-32" />
+                        <Textarea 
+                            id="feedback" 
+                            name="feedback" 
+                            placeholder="Provide overall feedback for the student, or generate it with AI." 
+                            className="min-h-32" 
+                            value={feedbackText}
+                            onChange={(e) => setFeedbackText(e.target.value)}
+                        />
                     </div>
                     <GradingSubmitButton />
                 </CardContent>
@@ -142,10 +187,25 @@ export default function GradeSubmissionPage({ params }: { params: { courseId: st
         if (!firestore) return null;
         return doc(firestore, 'courses', params.courseId, 'modules', params.moduleId, 'assignments', params.assignmentId, 'submissions', params.submissionId);
     }, [firestore, params.courseId, params.moduleId, params.assignmentId, params.submissionId]);
-
     const { data: submission, isLoading: isSubmissionLoading } = useDoc<Submission>(submissionRef);
 
-    const isLoading = isSubmissionLoading;
+    const assignmentRef = useMemoFirebase(() => {
+        if (!firestore) return null;
+        return doc(firestore, 'courses', params.courseId, 'modules', params.moduleId, 'assignments', params.assignmentId);
+    }, [firestore, params.courseId, params.moduleId, params.assignmentId]);
+    const { data: assignment, isLoading: isAssignmentLoading } = useDoc<Assignment>(assignmentRef);
+
+    const rubricRef = useMemoFirebase(() => {
+        if (!firestore) return null;
+        return doc(firestore, `courses/${params.courseId}/modules/${params.moduleId}/assignments/${params.assignmentId}/rubric`);
+    }, [firestore, params.courseId, params.moduleId, params.assignmentId]);
+    const criteriaQuery = useMemoFirebase(() => {
+        if (!firestore || !rubricRef) return null;
+        return query(collection(rubricRef, 'criteria'), orderBy('order'));
+    }, [firestore, rubricRef]);
+    const { data: criteria, isLoading: areCriteriaLoading } = useCollection<RubricCriterion>(criteriaQuery);
+
+    const isLoading = isSubmissionLoading || isAssignmentLoading || areCriteriaLoading;
 
     return (
         <div className="container mx-auto">
@@ -207,12 +267,13 @@ export default function GradeSubmissionPage({ params }: { params: { courseId: st
                         </CardContent>
                     </Card>
 
-                    {submission && (
+                    {submission && assignment && (
                          <GradingForm 
                             submission={submission} 
+                            assignment={assignment}
+                            criteria={criteria}
                             courseId={params.courseId} 
                             moduleId={params.moduleId} 
-                            assignmentId={params.assignmentId} 
                         />
                     )}
                 </div>

@@ -17,6 +17,7 @@ import { firebaseConfig } from '@/firebase/config';
 import { PlaceHolderImages } from './placeholder-images';
 import { revalidatePath } from 'next/cache';
 import type { ContentItem, Rubric, RubricCriterion } from './definitions';
+import { generateFeedbackForSubmission } from '@/ai/flows/generate-feedback-for-submission';
 
 // Server-side Firebase initialization for both Auth and Firestore.
 function getFirebaseServerServices() {
@@ -661,5 +662,50 @@ export async function saveGradeAndFeedback(
   } catch (error) {
     console.error('Failed to save grade and feedback:', error);
     return { success: false, message: 'An unexpected error occurred while saving.' };
+  }
+}
+
+export async function getAIAssistedFeedback(
+  { submissionText, assignmentDescription, rubricCriteria, userId }: {
+    submissionText: string;
+    assignmentDescription: string;
+    rubricCriteria: RubricCriterion[];
+    userId: string;
+  }
+): Promise<{ feedbackText: string; suggestedGrade: number | null; message?: string }> {
+  
+  if (!submissionText || !assignmentDescription || !rubricCriteria) {
+    return { feedbackText: '', suggestedGrade: null, message: 'Missing required data for AI feedback.' };
+  }
+
+  try {
+    // The AI flow expects a specific structure, so we map our criteria to it.
+    // This is defensive coding in case the structures diverge slightly.
+    const aiRubricCriteria = rubricCriteria.map(c => ({
+        description: c.description,
+        maxPoints: c.maxPoints,
+        levels: c.levels.map(l => ({ levelName: l.levelName, description: l.description })),
+    }));
+      
+    const result = await generateFeedbackForSubmission({
+        submissionText,
+        assignmentDescription,
+        rubricCriteria: aiRubricCriteria,
+    });
+    
+    await logAICost(userId, 'Gemini', 'AI Assisted Feedback', 0.003);
+
+    // Format the feedback items into a single string for the textarea
+    const feedbackText = result.feedbackItems
+      .map(item => `[${item.type}]\n${item.content}`)
+      .join('\n\n');
+      
+    return { 
+      feedbackText, 
+      suggestedGrade: result.suggestedGrade ?? null,
+    };
+  } catch (e) {
+    console.error(e);
+    return { feedbackText: '', suggestedGrade: null, message: 'Failed to generate AI feedback.' };
   }
 }
