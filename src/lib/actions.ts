@@ -9,17 +9,39 @@ import {
   createUserWithEmailAndPassword,
   signInWithEmailAndPassword,
   sendPasswordResetEmail,
+  type Auth,
 } from 'firebase/auth';
-import { initializeFirebase } from '@/firebase/index';
+import { initializeApp, getApps, getApp, type FirebaseApp } from 'firebase/app';
+import { firebaseConfig } from '@/firebase/config';
 
-// Initialize Firebase Admin SDK
-const { auth } = initializeFirebase();
+// Server-side Firebase initialization.
+function getFirebaseAuth(): Auth {
+  if (getApps().length === 0) {
+    // This logic is specific to Firebase App Hosting.
+    // It tries to initialize without a config, which App Hosting provides.
+    // In other environments, it falls back to the provided firebaseConfig.
+    try {
+      initializeApp();
+    } catch (e) {
+      if (process.env.NODE_ENV === 'production') {
+        console.warn(
+          'Automatic Firebase initialization failed. Falling back to firebase config object.',
+          e
+        );
+      }
+      initializeApp(firebaseConfig);
+    }
+  }
+  // Get the Auth instance for the already-initialized app.
+  return getAuth(getApp());
+}
 
 // Existing authenticate action
 export async function authenticate(
   prevState: string | undefined,
   formData: FormData,
 ) {
+  const auth = getFirebaseAuth();
   try {
     const email = formData.get('email') as string;
     const password = formData.get('password') as string;
@@ -78,6 +100,7 @@ export async function signup(prevState: any, formData: FormData) {
   }
 
   const { name, email, password, role } = validatedFields.data;
+  const auth = getFirebaseAuth();
 
   try {
     const userCredential = await createUserWithEmailAndPassword(auth, email, password);
@@ -124,6 +147,7 @@ export async function requestPasswordReset(prevState: any, formData: FormData) {
   }
   
   const { email } = validatedFields.data;
+  const auth = getFirebaseAuth();
 
   try {
     await sendPasswordResetEmail(auth, email);
