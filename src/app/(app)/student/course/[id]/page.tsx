@@ -9,8 +9,98 @@ import type { Course, Module, ContentItem, Assignment } from '@/lib/definitions'
 import Image from 'next/image';
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
+import { useState } from 'react';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 
-function ContentItemsList({ courseId, moduleId }: { courseId: string; moduleId: string }) {
+function ViewContentItemDialog({
+  isOpen,
+  setIsOpen,
+  item,
+}: {
+  isOpen: boolean;
+  setIsOpen: (open: boolean) => void;
+  item: ContentItem | null;
+}) {
+  if (!item) return null;
+
+  const getYoutubeEmbedUrl = (url: string) => {
+    if (!url) return null;
+    let videoId;
+    try {
+        const urlObj = new URL(url);
+        if (urlObj.hostname === 'youtu.be') {
+            videoId = urlObj.pathname.slice(1);
+        } else if (urlObj.hostname.includes('youtube.com')) {
+            videoId = urlObj.searchParams.get('v');
+        }
+        return videoId ? `https://www.youtube.com/embed/${videoId}` : null;
+    } catch (e) {
+        return null;
+    }
+  }
+
+  const embedUrl = item.type === 'video' ? getYoutubeEmbedUrl(item.contentUrl || '') : null;
+
+  return (
+    <Dialog open={isOpen} onOpenChange={setIsOpen}>
+      <DialogContent className="sm:max-w-3xl">
+        <DialogHeader>
+          <DialogTitle className="font-headline text-2xl">{item.title}</DialogTitle>
+          {item.description && (
+            <DialogDescription>{item.description}</DialogDescription>
+          )}
+        </DialogHeader>
+        <div className="py-4 max-h-[70vh] overflow-y-auto">
+          {item.type === 'reading' || item.type === 'document' ? (
+            <div className="prose prose-stone dark:prose-invert max-w-none text-muted-foreground whitespace-pre-wrap">
+              {item.textContent || "No content available."}
+            </div>
+          ) : item.type === 'video' && embedUrl ? (
+             <div className="aspect-video">
+                <iframe
+                    className="w-full h-full rounded-lg"
+                    src={embedUrl}
+                    title="YouTube video player"
+                    frameBorder="0"
+                    allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                    allowFullScreen
+                ></iframe>
+            </div>
+          ) : item.type === 'video' && item.contentUrl ? (
+            <p className="text-muted-foreground">Could not embed video. <a href={item.contentUrl} target="_blank" rel="noopener noreferrer" className="underline">View it here</a>.</p>
+          ) : item.type === 'link' && item.contentUrl ? (
+            <Button asChild>
+                <a href={item.contentUrl} target="_blank" rel="noopener noreferrer">
+                    Open Link <LinkIcon className="ml-2 h-4 w-4" />
+                </a>
+            </Button>
+          ) : item.type === 'quiz' ? (
+            <p className="text-muted-foreground">Quizzes are not yet implemented.</p>
+          ) : (
+            <p className="text-muted-foreground">No content available for this item.</p>
+          )}
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+
+function ContentItemsList({
+  courseId,
+  moduleId,
+  onItemClick,
+}: {
+  courseId: string;
+  moduleId: string;
+  onItemClick: (item: ContentItem) => void;
+}) {
   const firestore = useFirestore();
 
   const contentItemsQuery = useMemoFirebase(() => {
@@ -45,14 +135,14 @@ function ContentItemsList({ courseId, moduleId }: { courseId: string; moduleId: 
     <ul className="pl-4 py-2 space-y-1">
       {contentItems.map((item) => (
         <li key={item.id}>
-          <Link
-            href="#"
-            className="flex items-center gap-3 p-2 rounded-md hover:bg-muted"
+          <button
+            onClick={() => onItemClick(item)}
+            className="flex w-full items-center gap-3 p-2 rounded-md hover:bg-muted text-left"
           >
             {itemIcons[item.type] || <FileText className="h-4 w-4" />}
             <span className="flex-1">{item.title}</span>
             {item.type === 'video' && <span className="text-xs text-muted-foreground">12:30</span>}
-          </Link>
+          </button>
         </li>
       ))}
     </ul>
@@ -107,6 +197,8 @@ function AssignmentsList({ courseId, moduleId }: { courseId: string; moduleId: s
 
 export default function StudentCoursePage({ params }: { params: { id: string } }) {
   const firestore = useFirestore();
+  const [selectedItem, setSelectedItem] = useState<ContentItem | null>(null);
+  const [isDialogOpen, setIsDialogOpen] = useState(false);
 
   const courseRef = useMemoFirebase(() => {
     if (!firestore || !params.id) return null;
@@ -122,6 +214,11 @@ export default function StudentCoursePage({ params }: { params: { id: string } }
   const { data: modules, isLoading: areModulesLoading } = useCollection<Module>(modulesQuery);
 
   const isLoading = isCourseLoading || areModulesLoading;
+
+  const handleItemClick = (item: ContentItem) => {
+    setSelectedItem(item);
+    setIsDialogOpen(true);
+  };
 
   if (isLoading) {
     return (
@@ -191,7 +288,7 @@ export default function StudentCoursePage({ params }: { params: { id: string } }
                                 {module.title}
                             </AccordionTrigger>
                             <AccordionContent>
-                                <ContentItemsList courseId={params.id} moduleId={module.id} />
+                                <ContentItemsList courseId={params.id} moduleId={module.id} onItemClick={handleItemClick} />
                                 <AssignmentsList courseId={params.id} moduleId={module.id} />
                             </AccordionContent>
                         </AccordionItem>
@@ -209,6 +306,12 @@ export default function StudentCoursePage({ params }: { params: { id: string } }
                  <p className="text-muted-foreground">{course.description}</p>
             </div>
         </div>
+
+        <ViewContentItemDialog
+            isOpen={isDialogOpen}
+            setIsOpen={setIsDialogOpen}
+            item={selectedItem}
+        />
     </div>
   );
 }
