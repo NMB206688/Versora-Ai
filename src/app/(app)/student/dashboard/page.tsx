@@ -1,3 +1,5 @@
+'use client';
+
 import Link from 'next/link';
 import Image from 'next/image';
 import {
@@ -10,17 +12,20 @@ import {
 } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
-import { Badge } from '@/components/ui/badge';
 import { courses, assignments, recentFeedback } from '@/lib/data';
-import { ArrowRight, BookOpen, CalendarClock, MessageSquare, PlayCircle } from 'lucide-react';
+import { ArrowRight, CalendarClock, MessageSquare, PlayCircle } from 'lucide-react';
+import { useUser } from '@/firebase';
 
 export default function StudentDashboard() {
+  const { profile } = useUser();
   const continueLearningCourse = courses[1];
+
+  const firstName = profile?.firstName || 'Student';
 
   return (
     <div className="container mx-auto">
       <h1 className="font-headline text-3xl font-bold tracking-tight mb-6">
-        Welcome back, Alex!
+        Welcome back, {firstName}!
       </h1>
 
       <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
