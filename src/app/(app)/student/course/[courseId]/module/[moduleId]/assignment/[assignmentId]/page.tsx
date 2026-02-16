@@ -9,7 +9,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { Skeleton } from '@/components/ui/skeleton';
-import { ArrowLeft, BookOpen, CheckCircle, MessageSquare } from 'lucide-react';
+import { ArrowLeft, BookOpen, CheckCircle, MessageSquare, PlusCircle } from 'lucide-react';
 import { format } from 'date-fns';
 import type { Assignment, Rubric, RubricCriterion, Submission, Feedback } from '@/lib/definitions';
 import { Alert, AlertDescription } from '@/components/ui/alert';
@@ -254,6 +254,16 @@ export default function StudentAssignmentPage({ params }: { params: { courseId: 
                                                 )}
                                             </AlertDescription>
                                         </Alert>
+
+                                        {submission.grade !== undefined && (
+                                            <div className="flex justify-end">
+                                                <Button variant="secondary" disabled>
+                                                    <PlusCircle className="mr-2 h-4 w-4" />
+                                                    Add to Portfolio
+                                                </Button>
+                                            </div>
+                                        )}
+
                                         <div className="prose prose-stone dark:prose-invert max-w-none text-muted-foreground whitespace-pre-wrap p-4 bg-muted/50 rounded-md border">
                                             {submission.textContent}
                                         </div>

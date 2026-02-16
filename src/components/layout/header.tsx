@@ -1,5 +1,5 @@
 import Link from 'next/link';
-import { GraduationCap, LogOut, Settings, User as UserIcon } from 'lucide-react';
+import { Archive, GraduationCap, LogOut, Settings, User as UserIcon } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
   DropdownMenu,
@@ -22,6 +22,7 @@ const navLinks: Record<UserRole, NavLink[]> = {
   student: [
     { href: '/student/dashboard', label: 'Dashboard' },
     { href: '/student/writing-center', label: 'Writing Center' },
+    { href: '/student/portfolio', label: 'Portfolio' },
   ],
   instructor: [
     { href: '/instructor/dashboard', label: 'Dashboard' },
