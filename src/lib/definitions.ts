@@ -57,3 +57,11 @@ export interface ContentItem {
   textContent?: string;
   order: number;
 }
+
+export interface Enrollment {
+    id: string;
+    studentId: string;
+    courseId: string;
+    enrollmentDate: string;
+    completionDate?: string;
+}

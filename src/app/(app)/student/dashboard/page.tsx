@@ -12,14 +12,43 @@ import {
 } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
-import { courses, assignments, recentFeedback } from '@/lib/data';
+import { assignments, recentFeedback } from '@/lib/data';
 import { ArrowRight, CalendarClock, MessageSquare, PlayCircle } from 'lucide-react';
-import { useUser } from '@/firebase';
+import { useUser, useFirestore, useCollection, useMemoFirebase } from '@/firebase';
+import { collection, query, where, documentId } from 'firebase/firestore';
+import { useMemo } from 'react';
+import type { Course, Enrollment } from '@/lib/definitions';
+import { Skeleton } from '@/components/ui/skeleton';
 
 export default function StudentDashboard() {
-  const { profile } = useUser();
-  const continueLearningCourse = courses[1];
+  const { user, profile } = useUser();
+  const firestore = useFirestore();
 
+  // 1. Fetch enrollments for the current student
+  const enrollmentsQuery = useMemoFirebase(() => {
+    if (!user || !firestore) return null;
+    return query(collection(firestore, 'enrollments'), where('studentId', '==', user.uid));
+  }, [user, firestore]);
+
+  const { data: enrollments, isLoading: isLoadingEnrollments } = useCollection<Enrollment>(enrollmentsQuery);
+
+  // 2. Extract course IDs from enrollments
+  const enrolledCourseIds = useMemo(() => {
+    if (!enrollments) return [];
+    return enrollments.map(e => e.courseId);
+  }, [enrollments]);
+
+  // 3. Fetch course details for the enrolled courses
+  const coursesQuery = useMemoFirebase(() => {
+    if (!firestore || enrolledCourseIds.length === 0) return null;
+    // Note: 'in' queries are limited to 30 items. For more, you'd need multiple queries.
+    return query(collection(firestore, 'courses'), where(documentId(), 'in', enrolledCourseIds));
+  }, [firestore, enrolledCourseIds]);
+
+  const { data: studentCourses, isLoading: isLoadingCourses } = useCollection<Course>(coursesQuery);
+  
+  const isLoading = isLoadingEnrollments || isLoadingCourses;
+  const continueLearningCourse = studentCourses?.[0]; // Use the first enrolled course
   const firstName = profile?.firstName || 'Student';
 
   return (
@@ -31,36 +60,55 @@ export default function StudentDashboard() {
       <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
         {/* Continue Learning */}
         <Card className="lg:col-span-2 xl:col-span-2 shadow-lg transition-transform hover:scale-[1.02] duration-300">
-          <CardHeader>
-            <div className="flex items-center gap-2 text-muted-foreground">
-                <PlayCircle className="h-5 w-5" />
-                <span className="text-sm font-medium">Continue Learning</span>
-            </div>
-            <CardTitle className="font-headline text-2xl pt-2">{continueLearningCourse.title}</CardTitle>
-            <CardDescription>{continueLearningCourse.instructor}</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="relative w-full h-40 rounded-lg overflow-hidden mb-4">
-              <Image
-                src={continueLearningCourse.imageUrl}
-                alt={continueLearningCourse.title}
-                fill
-                style={{ objectFit: 'cover' }}
-                data-ai-hint={continueLearningCourse.imageHint}
-              />
-            </div>
-            <div className="space-y-2">
-                <Progress value={continueLearningCourse.progress} className="w-full" />
-                <p className="text-sm text-muted-foreground">{continueLearningCourse.progress}% complete</p>
-            </div>
-          </CardContent>
-          <CardFooter>
-            <Button asChild className="w-full bg-accent hover:bg-accent/90 text-accent-foreground">
-              <Link href="#">
-                Jump Back In <ArrowRight className="ml-2 h-4 w-4" />
-              </Link>
-            </Button>
-          </CardFooter>
+           {isLoading && !continueLearningCourse && (
+            <>
+                <CardHeader><Skeleton className="h-5 w-32" /><Skeleton className="h-8 w-3/4 mt-2" /><Skeleton className="h-4 w-1/2 mt-1" /></CardHeader>
+                <CardContent><Skeleton className="w-full h-40 rounded-lg" /><div className="space-y-2 mt-4"><Skeleton className="h-4 w-full" /><Skeleton className="h-4 w-3/4" /></div></CardContent>
+                <CardFooter><Skeleton className="h-10 w-full" /></CardFooter>
+            </>
+           )}
+          {!isLoading && continueLearningCourse && (
+            <>
+              <CardHeader>
+                <div className="flex items-center gap-2 text-muted-foreground">
+                    <PlayCircle className="h-5 w-5" />
+                    <span className="text-sm font-medium">Continue Learning</span>
+                </div>
+                <CardTitle className="font-headline text-2xl pt-2">{continueLearningCourse.title}</CardTitle>
+                <CardDescription>{continueLearningCourse.instructorName}</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="relative w-full h-40 rounded-lg overflow-hidden mb-4">
+                  <Image
+                    src={continueLearningCourse.imageUrl}
+                    alt={continueLearningCourse.title}
+                    fill
+                    style={{ objectFit: 'cover' }}
+                    data-ai-hint={continueLearningCourse.imageHint}
+                  />
+                </div>
+                <div className="space-y-2">
+                    {/* Progress is hardcoded for now */}
+                    <Progress value={30} className="w-full" />
+                    <p className="text-sm text-muted-foreground">30% complete</p>
+                </div>
+              </CardContent>
+              <CardFooter>
+                <Button asChild className="w-full bg-accent hover:bg-accent/90 text-accent-foreground">
+                  <Link href="#">
+                    Jump Back In <ArrowRight className="ml-2 h-4 w-4" />
+                  </Link>
+                </Button>
+              </CardFooter>
+            </>
+          )}
+           {!isLoading && !continueLearningCourse && (
+             <CardContent className="flex flex-col items-center justify-center h-full text-center py-12">
+                 <h3 className="font-headline text-xl">Ready to Learn?</h3>
+                 <p className="text-muted-foreground mt-2">You are not enrolled in any courses yet.</p>
+                 <Button className="mt-4">Browse Courses</Button>
+             </CardContent>
+           )}
         </Card>
 
         {/* Upcoming Deadlines */}
@@ -119,32 +167,64 @@ export default function StudentDashboard() {
                 <Link href="#">View All</Link>
             </Button>
         </div>
-        <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-          {courses.map((course) => (
-            <Card key={course.id} className="overflow-hidden shadow-lg transition-transform hover:scale-[1.02] duration-300">
-                <CardHeader className="p-0">
-                    <div className="relative w-full h-40">
-                    <Image
-                        src={course.imageUrl}
-                        alt={course.title}
-                        fill
-                        style={{ objectFit: 'cover' }}
-                        data-ai-hint={course.imageHint}
-                    />
-                    </div>
-                </CardHeader>
-              <CardContent className="p-4">
-                <CardTitle className="font-headline text-lg mb-1">{course.title}</CardTitle>
-                <CardDescription className="text-sm mb-2">{course.instructor}</CardDescription>
-                <Progress value={course.progress} className="w-full mb-1" />
-                <p className="text-xs text-muted-foreground">{course.progress}% complete</p>
-              </CardContent>
-              <CardFooter className="p-4 pt-0">
-                <Button variant="outline" className="w-full">Go to Course</Button>
-              </CardFooter>
-            </Card>
-          ))}
-        </div>
+        
+        {isLoading && (
+             <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+                {[...Array(4)].map((_, i) => (
+                  <Card key={i} className="overflow-hidden">
+                    <Skeleton className="w-full h-40" />
+                    <CardContent className="p-4 space-y-2">
+                      <Skeleton className="h-5 w-3/4" />
+                      <Skeleton className="h-4 w-1/2" />
+                       <Skeleton className="h-4 w-full pt-2" />
+                        <Skeleton className="h-4 w-1/4" />
+                    </CardContent>
+                    <CardFooter className="p-4 pt-0">
+                      <Skeleton className="h-10 w-full" />
+                    </CardFooter>
+                  </Card>
+                ))}
+              </div>
+        )}
+
+        {!isLoading && studentCourses && studentCourses.length > 0 && (
+            <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+            {studentCourses.map((course) => (
+                <Card key={course.id} className="overflow-hidden shadow-lg transition-transform hover:scale-[1.02] duration-300">
+                    <CardHeader className="p-0">
+                        <div className="relative w-full h-40">
+                        <Image
+                            src={course.imageUrl}
+                            alt={course.title}
+                            fill
+                            style={{ objectFit: 'cover' }}
+                            data-ai-hint={course.imageHint}
+                        />
+                        </div>
+                    </CardHeader>
+                <CardContent className="p-4">
+                    <CardTitle className="font-headline text-lg mb-1">{course.title}</CardTitle>
+                    <CardDescription className="text-sm mb-2">{course.instructorName}</CardDescription>
+                    {/* Progress is hardcoded for now */}
+                    <Progress value={30} className="w-full mb-1" />
+                    <p className="text-xs text-muted-foreground">30% complete</p>
+                </CardContent>
+                <CardFooter className="p-4 pt-0">
+                    <Button variant="outline" className="w-full">Go to Course</Button>
+                </CardFooter>
+                </Card>
+            ))}
+            </div>
+        )}
+
+        {!isLoading && (!studentCourses || studentCourses.length === 0) && (
+            <div className="text-center text-muted-foreground border-2 border-dashed rounded-lg py-12">
+                <h3 className="font-headline text-xl">No Courses Yet</h3>
+                <p className="mt-2">You are not enrolled in any courses. Browse the course catalog to get started.</p>
+                <Button className="mt-4">Browse Courses</Button>
+            </div>
+        )}
+
       </div>
     </div>
   );
