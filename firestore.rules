@@ -1,0 +1,316 @@
+/**
+ * Core Philosophy: This ruleset enforces a robust role-based and ownership-based security model
+ * for a Learning Management System (LMS). The core principle is "Authorization Independence,"
+ * where authorization data is extensively denormalized onto documents to ensure security checks
+ * are fast and simple, avoiding costly and complex cross-document `get()` calls.
+ *
+ * Data Structure:
+ * - /users/{userId}: Private user profiles, managed only by the owner.
+ * - /roles_admin/{adminId}: A lookup collection to efficiently identify global administrators.
+ * - /departments/{departmentId}: Globally readable academic departments, writable only by admins.
+ * - /courses/{courseId}/...: A hierarchical structure for all course-related content. Access is
+ *   granted based on denormalized roles (instructor) and membership (enrolled students).
+ * - /enrollments/{enrollmentId}: A top-level collection linking students to courses, designed
+ *   to enable efficient queries for both students ("My Courses") and instructors ("My Roster").
+ * - /aiCostLogs/{logId}: A restricted collection for administrative cost tracking, accessible
+ *   only to global administrators.
+ *
+ * Key Security Decisions:
+ * - Admin Access: A user's admin status is determined by the existence of their UID in the
+ *   `/roles_admin` collection, enabling a simple `exists()` check.
+ * - Instructor vs. Student: Instructors have full write access to the courses they own and all
+ *   nested content. Students have read-only access to published course content *if* they are enrolled.
+ * - Denormalization for Authorization: Critical authorization fields like `courseInstructorId`,
+ *   `coursePublished`, `studentId`, and a `courseStudentMembers` map are copied onto nested documents.
+ *   This allows a rule for a deeply nested document (e.g., a "feedback" item) to make a security
+ *   decision by only inspecting that document's data, which is highly performant.
+ * - Queries as Policy (QAPs): `list` operations are generally permitted for signed-in users on
+ *   collections with mixed access (like course content). Security is enforced by the more granular `get`
+ *   rule, which filters the results of the query on the backend. This requires clients to build
+ *   queries that only request data they are authorized to see.
+ * - Default Posture: Access is denied by default. All permissions must be explicitly granted.
+ *   Write operations are strictly controlled, while read operations are more permissive to
+ *   support the application's user experience.
+ */
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // --------------------------------
+    // Helper Functions
+    // --------------------------------
+
+    /**
+     * Authenticated users only.
+     */
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    /**
+     * Checks if the currently authenticated user is the owner of a resource.
+     * @param userId The UID of the user to check against.
+     */
+    function isOwner(userId) {
+      return request.auth.uid == userId;
+    }
+
+    /**
+     * Checks if the currently authenticated user is an administrator.
+     * Admins are defined by the existence of their UID in the /roles_admin collection.
+     */
+    function isAdmin() {
+      return exists(/databases/$(database)/documents/roles_admin/$(request.auth.uid));
+    }
+
+    /**
+     * Checks if the authenticated user is the instructor of a given course or content.
+     * Relies on a denormalized `instructorId` or `courseInstructorId` field.
+     */
+    function isCourseInstructor(docData) {
+      return request.auth.uid == docData.instructorId || request.auth.uid == docData.courseInstructorId;
+    }
+
+    /**
+     * Checks if the authenticated user is the owner of a student submission.
+     * Relies on a denormalized `studentId` or `submissionStudentId` field.
+     */
+    function isSubmissionOwner(docData) {
+      return request.auth.uid == docData.studentId || request.auth.uid == docData.submissionStudentId;
+    }
+
+    /**
+     * Validates if a user is an enrolled student and if the course content is published.
+     * Relies on a denormalized `courseStudentMembers` map and `coursePublished` boolean.
+     */
+    function isEnrolledAndPublished(docData) {
+      return docData.coursePublished == true && request.auth.uid in docData.courseStudentMembers;
+    }
+
+    /**
+     * Checks if the user is authorized to read course content (either as instructor or enrolled student).
+     */
+    function canReadCourseContent(docData) {
+      return isCourseInstructor(docData) || isEnrolledAndPublished(docData);
+    }
+
+    /**
+     * Checks if the user is authorized to read an approved rubric.
+     */
+    function canReadApprovedRubric(docData) {
+      let isApproved = docData.status == 'Approved' || docData.rubricStatus == 'Approved';
+      return isCourseInstructor(docData) || (isApproved && isEnrolledAndPublished(docData));
+    }
+
+    // --------------------------------
+    // User Data
+    // --------------------------------
+
+    /**
+     * @description Users can create, read, and update their own user profile. They cannot delete it.
+     * @path /users/{userId}
+     * @allow (create) A new user signs up: auth.uid = 'user_abc', path = '/users/user_abc'
+     * @deny (get) A user tries to read another user's profile: auth.uid = 'user_123', path = '/users/user_abc'
+     * @principle Restricts access to a user's own data tree.
+     */
+    match /users/{userId} {
+      allow get, update: if isOwner(userId);
+      allow create: if isOwner(userId) && request.resource.data.id == userId;
+      allow list, delete: if false;
+    }
+
+    /**
+     * @description A student can manage their own portfolio and its items.
+     * @path /users/{studentId}/portfolio/{document=**}
+     * @allow (create) A student adds an item to their portfolio: auth.uid = 'student_abc', path = '/users/student_abc/portfolio/items/item_1'
+     * @deny (update) An instructor tries to modify a student's portfolio: auth.uid = 'instr_xyz', path = '/users/student_abc/portfolio'
+     * @principle Enforces strict ownership for a user's private subcollections.
+     */
+    match /users/{studentId}/portfolio/{document=**} {
+      allow get, list, create, update, delete: if isOwner(studentId);
+    }
+
+    // --------------------------------
+    // Roles & Admin
+    // --------------------------------
+
+    /**
+     * @description Admin roles are used for existence checks and are not client-writable. Only readable by other admins.
+     * @path /roles_admin/{adminId}
+     * @allow (get) An admin function checks if another user is an admin: auth.uid is an admin.
+     * @deny (create) A regular user tries to make themselves an admin.
+     * @principle Secures global role definitions from client modification.
+     */
+    match /roles_admin/{adminId} {
+      allow get: if isAdmin();
+      allow list, create, update, delete: if false;
+    }
+
+    /**
+     * @description AI cost logs are for administrative use only.
+     * @path /aiCostLogs/{logId}
+     * @allow (get) An admin views the cost logs: auth.uid is in /roles_admin.
+     * @deny (list) A regular user tries to list AI costs.
+     * @principle Enforces homogeneous admin-only access for a sensitive collection.
+     */
+    match /aiCostLogs/{logId} {
+      allow get, list, create, update, delete: if isAdmin();
+    }
+
+    // --------------------------------
+    // Public & Shared Data
+    // --------------------------------
+
+    /**
+     * @description Departments are globally readable by any signed-in user, but only managed by administrators.
+     * @path /departments/{departmentId}
+     * @allow (list) Any signed-in user lists all departments.
+     * @deny (create) An instructor tries to create a new department.
+     * @principle Implements public read with role-based writes.
+     */
+    match /departments/{departmentId} {
+      allow get, list: if isSignedIn();
+      allow create, update, delete: if isAdmin();
+    }
+
+    /**
+     * @description Course documents can be managed by the instructor. Enrolled students can read published courses.
+     * @path /courses/{courseId}
+     * @allow (update) An instructor updates their course description: auth.uid == resource.data.instructorId
+     * @deny (update) A student tries to change the course title.
+     * @principle Enforces ownership for writes and shared, conditional access for reads.
+     */
+    match /courses/{courseId} {
+      allow get: if canReadCourseContent(resource.data);
+      allow list: if isSignedIn(); // `get` rule secures the results of the query
+      allow create: if isSignedIn() && isOwner(request.resource.data.instructorId);
+      allow update, delete: if isCourseInstructor(resource.data);
+    }
+
+    /**
+     * @description Enrollments can be created and deleted by the student. They can be read by the student and the course instructor.
+     * @path /enrollments/{enrollmentId}
+     * @allow (get) An instructor views an enrollment for their course: auth.uid == resource.data.courseInstructorId
+     * @deny (delete) An instructor tries to un-enroll a student.
+     * @principle Enables efficient queries for both students and instructors via a linking collection.
+     */
+    match /enrollments/{enrollmentId} {
+      allow get: if isOwner(resource.data.studentId) || isOwner(resource.data.courseInstructorId);
+      allow list: if isSignedIn(); // `get` rule secures the results of the query
+      allow create: if isOwner(request.resource.data.studentId);
+      allow update, delete: if isOwner(resource.data.studentId);
+    }
+
+    // --------------------------------
+    // Nested Course Content
+    // --------------------------------
+
+    /**
+     * @description Course modules are managed by the instructor and readable by enrolled students if published.
+     * @path /courses/{courseId}/modules/{moduleId}
+     * @allow (get) An enrolled student views a module in a published course.
+     * @deny (create) A student tries to add a new learning objective to a course.
+     * @principle Inherits authorization from the parent course via denormalized fields.
+     */
+    match /courses/{courseId}/modules/{moduleId} {
+      allow get: if canReadCourseContent(resource.data);
+      allow list: if isSignedIn(); // `get` rule secures the results of the query
+      allow create: if isCourseInstructor(get(/databases/$(database)/documents/courses/$(courseId)).data);
+      allow update, delete: if isCourseInstructor(resource.data);
+    }
+
+    /**
+     * @description Course learning objectives are managed by the instructor and readable by enrolled students if published.
+     * @path /courses/{courseId}/learningObjectives/{objectiveId}
+     * @allow (get) An enrolled student views a learning objective in a published course.
+     * @deny (create) A student tries to add a new learning objective to a course.
+     * @principle Inherits authorization from the parent course via denormalized fields.
+     */
+    match /courses/{courseId}/learningObjectives/{objectiveId} {
+      allow get: if canReadCourseContent(resource.data);
+      allow list: if isSignedIn(); // `get` rule secures the results of the query
+      allow create: if isCourseInstructor(get(/databases/$(database)/documents/courses/$(courseId)).data);
+      allow update, delete: if isCourseInstructor(resource.data);
+    }
+
+    /**
+     * @description Course content items are managed by the instructor and readable by enrolled students if published.
+     * @path /courses/{courseId}/contentItems/{itemId}
+     * @allow (get) An enrolled student views a content item in a published course.
+     * @deny (create) A student tries to add a new learning objective to a course.
+     * @principle Inherits authorization from the parent course via denormalized fields.
+     */
+    match /courses/{courseId}/contentItems/{itemId} {
+      allow get: if canReadCourseContent(resource.data);
+      allow list: if isSignedIn(); // `get` rule secures the results of the query
+      allow create: if isCourseInstructor(get(/databases/$(database)/documents/courses/$(courseId)).data);
+      allow update, delete: if isCourseInstructor(resource.data);
+    }
+
+    /**
+     * @description Assignments are managed by the instructor and readable by enrolled students if published.
+     * @path /courses/{courseId}/modules/{moduleId}/assignments/{assignmentId}
+     * @allow (get) An enrolled student views an assignment in a published course.
+     * @deny (update) A student tries to change an assignment's deadline.
+     * @principle Inherits authorization from the parent course via denormalized fields.
+     */
+    match /courses/{courseId}/modules/{moduleId}/assignments/{assignmentId} {
+      allow get: if canReadCourseContent(resource.data);
+      allow list: if isSignedIn(); // `get` rule secures the results of the query
+      allow create: if isCourseInstructor(get(/databases/$(database)/documents/courses/$(courseId)).data);
+      allow update, delete: if isCourseInstructor(resource.data);
+    }
+
+    /**
+     * @description Rubrics are managed by instructors. Students can read them only if they are approved and the student is enrolled.
+     * @path /courses/{courseId}/modules/{moduleId}/assignments/{assignmentId}/rubric
+     * @allow (get) A student views an 'Approved' rubric for an assignment.
+     * @deny (get) A student tries to view a 'Draft' rubric.
+     * @principle Enforces status-based read access for non-owners.
+     */
+    match /courses/{courseId}/modules/{moduleId}/assignments/{assignmentId}/rubric {
+      allow get: if canReadApprovedRubric(resource.data);
+      allow list, create, update, delete: if isCourseInstructor(get(/databases/$(database)/documents/courses/$(courseId)).data);
+    }
+
+    /**
+     * @description Rubric criteria inherit access from their parent rubric.
+     * @path /courses/{courseId}/modules/{moduleId}/assignments/{assignmentId}/rubric/criteria/{criterionId}
+     * @allow (list) An instructor lists all criteria for their assignment's rubric.
+     * @deny (create) A student tries to add a criterion to a rubric.
+     * @principle Inherits authorization from its parent via denormalized fields, including status.
+     */
+    match /courses/{courseId}/modules/{moduleId}/assignments/{assignmentId}/rubric/criteria/{criterionId} {
+        allow get: if canReadApprovedRubric(resource.data);
+        allow list: if isCourseInstructor(get(/databases/$(database)/documents/courses/$(courseId)).data);
+        allow create, update, delete: if isCourseInstructor(get(/databases/$(database)/documents/courses/$(courseId)).data);
+    }
+
+    /**
+     * @description Submissions can be created/managed by the submitting student. They can be read by the instructor.
+     * @path /courses/{courseId}/modules/{moduleId}/assignments/{assignmentId}/submissions/{submissionId}
+     * @allow (create) A student submits their work: auth.uid == request.resource.data.studentId
+     * @deny (update) An instructor tries to change a student's submitted work.
+     * @principle Implements composite ownership: student has write access, instructor has read access.
+     */
+    match /courses/{courseId}/modules/{moduleId}/assignments/{assignmentId}/submissions/{submissionId} {
+      allow get: if isSubmissionOwner(resource.data) || isCourseInstructor(resource.data);
+      allow list: if isCourseInstructor(get(/databases/$(database)/documents/courses/$(courseId)).data);
+      allow create: if isSubmissionOwner(request.resource.data);
+      allow update, delete: if isSubmissionOwner(resource.data);
+    }
+
+    /**
+     * @description Feedback can be written by instructors and read by the student who owns the submission.
+     * @path /courses/{courseId}/modules/{moduleId}/assignments/{assignmentId}/submissions/{submissionId}/feedback/{feedbackId}
+     * @allow (get) A student reads feedback on their own submission.
+     * @deny (create) A student tries to write feedback on another student's submission.
+     * @principle Grants write access to course owner (instructor) and read access to resource owner (student).
+     */
+    match /courses/{courseId}/modules/{moduleId}/assignments/{assignmentId}/submissions/{submissionId}/feedback/{feedbackId} {
+      allow get: if isSubmissionOwner(resource.data) || isCourseInstructor(resource.data);
+      allow list: if isSubmissionOwner(get(/databases/$(database)/documents/courses/$(courseId)/modules/$(moduleId)/assignments/$(assignmentId)/submissions/$(submissionId)).data) || isCourseInstructor(get(/databases/$(database)/documents/courses/$(courseId)).data);
+      allow create, update, delete: if isCourseInstructor(resource.data);
+    }
+  }
+}

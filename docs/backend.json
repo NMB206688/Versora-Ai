@@ -1,0 +1,963 @@
+{
+  "entities": {
+    "User": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "User",
+      "type": "object",
+      "description": "Represents a user of the VersoraAI application, including students, instructors, and administrators.",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique identifier for the User entity."
+        },
+        "email": {
+          "type": "string",
+          "description": "Email address of the user (used for identification, not authentication credentials).",
+          "format": "email"
+        },
+        "firstName": {
+          "type": "string",
+          "description": "The first name of the user."
+        },
+        "lastName": {
+          "type": "string",
+          "description": "The last name of the user."
+        },
+        "role": {
+          "type": "string",
+          "description": "The role of the user within the application (e.g., 'Student', 'Instructor', 'Admin')."
+        },
+        "creationDate": {
+          "type": "string",
+          "description": "Timestamp when the user account was created.",
+          "format": "date-time"
+        },
+        "lastLoginDate": {
+          "type": "string",
+          "description": "Timestamp of the user's last login.",
+          "format": "date-time"
+        }
+      },
+      "required": [
+        "id",
+        "email",
+        "firstName",
+        "lastName",
+        "role",
+        "creationDate"
+      ]
+    },
+    "Department": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "Department",
+      "type": "object",
+      "description": "Represents an academic department within the institution.",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique identifier for the Department entity."
+        },
+        "name": {
+          "type": "string",
+          "description": "The name of the academic department."
+        },
+        "description": {
+          "type": "string",
+          "description": "A brief description of the department."
+        }
+      },
+      "required": [
+        "id",
+        "name"
+      ]
+    },
+    "Course": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "Course",
+      "type": "object",
+      "description": "Represents a course offered within the learning management system.",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique identifier for the Course entity."
+        },
+        "title": {
+          "type": "string",
+          "description": "The title of the course."
+        },
+        "description": {
+          "type": "string",
+          "description": "A detailed description of the course content and objectives."
+        },
+        "instructorId": {
+          "type": "string",
+          "description": "Reference to the User acting as the primary instructor for this course. (Relationship: User 1:N Course)"
+        },
+        "departmentId": {
+          "type": "string",
+          "description": "Reference to the Department this course belongs to. (Relationship: Department 1:N Course)"
+        },
+        "published": {
+          "type": "boolean",
+          "description": "Indicates whether the course is visible and accessible to students."
+        },
+        "creationDate": {
+          "type": "string",
+          "description": "Timestamp when the course was created.",
+          "format": "date-time"
+        }
+      },
+      "required": [
+        "id",
+        "title",
+        "description",
+        "instructorId",
+        "departmentId",
+        "published",
+        "creationDate"
+      ]
+    },
+    "Enrollment": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "Enrollment",
+      "type": "object",
+      "description": "Represents a student's enrollment in a specific course.",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique identifier for the Enrollment entity."
+        },
+        "studentId": {
+          "type": "string",
+          "description": "Reference to the User (student) enrolled in the course. (Relationship: User N:N Course via Enrollment)"
+        },
+        "courseId": {
+          "type": "string",
+          "description": "Reference to the Course the student is enrolled in. (Relationship: User N:N Course via Enrollment)"
+        },
+        "enrollmentDate": {
+          "type": "string",
+          "description": "Timestamp when the student enrolled in the course.",
+          "format": "date-time"
+        },
+        "completionDate": {
+          "type": "string",
+          "description": "Timestamp when the student completed the course (optional).",
+          "format": "date-time"
+        }
+      },
+      "required": [
+        "id",
+        "studentId",
+        "courseId",
+        "enrollmentDate"
+      ]
+    },
+    "Module": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "Module",
+      "type": "object",
+      "description": "Represents an organizational unit or section within a course.",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique identifier for the Module entity."
+        },
+        "courseId": {
+          "type": "string",
+          "description": "Reference to the Course this module belongs to. (Relationship: Course 1:N Module)"
+        },
+        "title": {
+          "type": "string",
+          "description": "The title of the module."
+        },
+        "description": {
+          "type": "string",
+          "description": "A brief description of the module's content or objectives."
+        },
+        "order": {
+          "type": "number",
+          "description": "The sequential order of the module within its course."
+        }
+      },
+      "required": [
+        "id",
+        "courseId",
+        "title",
+        "order"
+      ]
+    },
+    "ContentItem": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "ContentItem",
+      "type": "object",
+      "description": "Represents an individual piece of learning content within a module, such as a video, reading, or link.",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique identifier for the ContentItem entity."
+        },
+        "moduleId": {
+          "type": "string",
+          "description": "Reference to the Module this content item belongs to. (Relationship: Module 1:N ContentItem)"
+        },
+        "title": {
+          "type": "string",
+          "description": "The title of the content item."
+        },
+        "description": {
+          "type": "string",
+          "description": "A brief description of the content item."
+        },
+        "type": {
+          "type": "string",
+          "description": "The type of content (e.g., 'Video', 'Reading', 'Quiz', 'Link', 'Document')."
+        },
+        "contentUrl": {
+          "type": "string",
+          "description": "URL to the external content or file for this item (e.g., a YouTube link, a PDF document).",
+          "format": "uri"
+        },
+        "textContent": {
+          "type": "string",
+          "description": "Direct text content for items that don't rely on an external URL."
+        },
+        "order": {
+          "type": "number",
+          "description": "The sequential order of the content item within its module."
+        }
+      },
+      "required": [
+        "id",
+        "moduleId",
+        "title",
+        "type",
+        "order"
+      ]
+    },
+    "LearningObjective": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "LearningObjective",
+      "type": "object",
+      "description": "Represents a specific learning goal or outcome for a course or module.",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique identifier for the LearningObjective entity."
+        },
+        "courseId": {
+          "type": "string",
+          "description": "Reference to the Course this learning objective is associated with. (Relationship: Course 1:N LearningObjective)"
+        },
+        "title": {
+          "type": "string",
+          "description": "The title or short statement of the learning objective."
+        },
+        "description": {
+          "type": "string",
+          "description": "A detailed description of what a student should be able to do upon achieving this objective."
+        }
+      },
+      "required": [
+        "id",
+        "courseId",
+        "title",
+        "description"
+      ]
+    },
+    "Assignment": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "Assignment",
+      "type": "object",
+      "description": "Represents a task or activity assigned to students for evaluation.",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique identifier for the Assignment entity."
+        },
+        "moduleId": {
+          "type": "string",
+          "description": "Reference to the Module this assignment belongs to. (Relationship: Module 1:N Assignment)"
+        },
+        "title": {
+          "type": "string",
+          "description": "The title of the assignment."
+        },
+        "description": {
+          "type": "string",
+          "description": "Full instructions and details for the assignment."
+        },
+        "deadline": {
+          "type": "string",
+          "description": "The submission deadline for the assignment.",
+          "format": "date-time"
+        },
+        "pointsPossible": {
+          "type": "number",
+          "description": "The maximum points a student can earn for this assignment."
+        },
+        "type": {
+          "type": "string",
+          "description": "The type of assignment (e.g., 'Writing', 'Quiz', 'Project', 'Discussion')."
+        },
+        "learningObjectiveIds": {
+          "type": "array",
+          "description": "References to LearningObjectives that this assignment assesses. (Relationship: Assignment N:N LearningObjective)",
+          "items": {
+            "type": "string"
+          }
+        }
+      },
+      "required": [
+        "id",
+        "moduleId",
+        "title",
+        "description",
+        "deadline",
+        "pointsPossible",
+        "type"
+      ]
+    },
+    "Rubric": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "Rubric",
+      "type": "object",
+      "description": "Represents a grading rubric used to evaluate an assignment, potentially AI-generated.",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique identifier for the Rubric entity."
+        },
+        "assignmentId": {
+          "type": "string",
+          "description": "Reference to the Assignment this rubric is used for. (Relationship: Assignment 1:1 Rubric)"
+        },
+        "instructorId": {
+          "type": "string",
+          "description": "Reference to the User (instructor) who created or approved this rubric. (Relationship: User 1:N Rubric)"
+        },
+        "creationDate": {
+          "type": "string",
+          "description": "Timestamp when the rubric was created or AI-generated.",
+          "format": "date-time"
+        },
+        "status": {
+          "type": "string",
+          "description": "The current status of the rubric (e.g., 'Draft', 'PendingApproval', 'Approved', 'Rejected')."
+        },
+        "aiGenerated": {
+          "type": "boolean",
+          "description": "Indicates if the rubric was initially generated by AI."
+        }
+      },
+      "required": [
+        "id",
+        "assignmentId",
+        "instructorId",
+        "creationDate",
+        "status",
+        "aiGenerated"
+      ]
+    },
+    "RubricCriterion": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "RubricCriterion",
+      "type": "object",
+      "description": "Represents an individual criterion within a grading rubric.",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique identifier for the RubricCriterion entity."
+        },
+        "rubricId": {
+          "type": "string",
+          "description": "Reference to the Rubric this criterion belongs to. (Relationship: Rubric 1:N RubricCriterion)"
+        },
+        "description": {
+          "type": "string",
+          "description": "The description of the criterion (e.g., 'Clarity and Cohesion')."
+        },
+        "maxPoints": {
+          "type": "number",
+          "description": "The maximum points achievable for this specific criterion."
+        },
+        "levels": {
+          "type": "array",
+          "description": "An ordered list of descriptive levels for this criterion (e.g., ['Beginning', 'Developing', 'Proficient', 'Exemplary']).",
+          "items": {
+            "type": "string"
+          }
+        },
+        "order": {
+          "type": "number",
+          "description": "The sequential order of the criterion within its rubric."
+        }
+      },
+      "required": [
+        "id",
+        "rubricId",
+        "description",
+        "maxPoints",
+        "levels",
+        "order"
+      ]
+    },
+    "Submission": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "Submission",
+      "type": "object",
+      "description": "Represents a student's submitted work for an assignment.",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique identifier for the Submission entity."
+        },
+        "assignmentId": {
+          "type": "string",
+          "description": "Reference to the Assignment this submission is for. (Relationship: Assignment 1:N Submission)"
+        },
+        "studentId": {
+          "type": "string",
+          "description": "Reference to the User (student) who made this submission. (Relationship: User 1:N Submission)"
+        },
+        "submissionDate": {
+          "type": "string",
+          "description": "Timestamp when the submission was made.",
+          "format": "date-time"
+        },
+        "contentUrl": {
+          "type": "string",
+          "description": "URL to the submitted content (e.g., a document, a link to a project).",
+          "format": "uri"
+        },
+        "grade": {
+          "type": "number",
+          "description": "The score received on the assignment, if graded."
+        }
+      },
+      "required": [
+        "id",
+        "assignmentId",
+        "studentId",
+        "submissionDate"
+      ]
+    },
+    "Feedback": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "Feedback",
+      "type": "object",
+      "description": "Represents feedback provided on a student's submission, which can be instructor-generated or AI-generated.",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique identifier for the Feedback entity."
+        },
+        "submissionId": {
+          "type": "string",
+          "description": "Reference to the Submission this feedback is for. (Relationship: Submission 1:N Feedback)"
+        },
+        "giverId": {
+          "type": "string",
+          "description": "Reference to the User (instructor) who provided the feedback. Null if AI generated. (Relationship: User 1:N Feedback)"
+        },
+        "aiGenerated": {
+          "type": "boolean",
+          "description": "Indicates if this feedback was generated by AI."
+        },
+        "content": {
+          "type": "string",
+          "description": "The text content of the feedback."
+        },
+        "creationDate": {
+          "type": "string",
+          "description": "Timestamp when the feedback was provided.",
+          "format": "date-time"
+        },
+        "type": {
+          "type": "string",
+          "description": "The type of feedback (e.g., 'Clarity', 'Structure', 'Citation', 'General', 'Grammar')."
+        }
+      },
+      "required": [
+        "id",
+        "submissionId",
+        "aiGenerated",
+        "content",
+        "creationDate",
+        "type"
+      ]
+    },
+    "Portfolio": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "Portfolio",
+      "type": "object",
+      "description": "Represents a student's curated collection of their best work or evidence of learning.",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique identifier for the Portfolio entity."
+        },
+        "studentId": {
+          "type": "string",
+          "description": "Reference to the User (student) who owns this portfolio. (Relationship: User 1:1 Portfolio)"
+        },
+        "title": {
+          "type": "string",
+          "description": "The title of the portfolio."
+        },
+        "description": {
+          "type": "string",
+          "description": "A description or introduction to the portfolio."
+        },
+        "creationDate": {
+          "type": "string",
+          "description": "Timestamp when the portfolio was created.",
+          "format": "date-time"
+        },
+        "lastUpdateDate": {
+          "type": "string",
+          "description": "Timestamp of the last update to the portfolio.",
+          "format": "date-time"
+        }
+      },
+      "required": [
+        "id",
+        "studentId",
+        "title",
+        "creationDate"
+      ]
+    },
+    "PortfolioItem": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "PortfolioItem",
+      "type": "object",
+      "description": "Represents an individual submission or piece of work included within a student's portfolio.",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique identifier for the PortfolioItem entity."
+        },
+        "portfolioId": {
+          "type": "string",
+          "description": "Reference to the Portfolio this item belongs to. (Relationship: Portfolio 1:N PortfolioItem)"
+        },
+        "submissionId": {
+          "type": "string",
+          "description": "Reference to the Submission included as evidence of learning. (Relationship: Submission 1:N PortfolioItem)"
+        },
+        "description": {
+          "type": "string",
+          "description": "A student's reflection or description of why this submission is included in their portfolio."
+        },
+        "addedDate": {
+          "type": "string",
+          "description": "Timestamp when this item was added to the portfolio.",
+          "format": "date-time"
+        }
+      },
+      "required": [
+        "id",
+        "portfolioId",
+        "submissionId",
+        "description",
+        "addedDate"
+      ]
+    },
+    "AICostLog": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "AICostLog",
+      "type": "object",
+      "description": "Records individual AI service usage events and their associated costs for administrative tracking.",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique identifier for the AICostLog entity."
+        },
+        "timestamp": {
+          "type": "string",
+          "description": "Timestamp when the AI service was used.",
+          "format": "date-time"
+        },
+        "serviceName": {
+          "type": "string",
+          "description": "The name of the AI service used (e.g., 'ChatGPT', 'Gemini')."
+        },
+        "featureUsed": {
+          "type": "string",
+          "description": "The specific application feature that utilized the AI service (e.g., 'Writing Feedback', 'Rubric Generation')."
+        },
+        "costPerUnit": {
+          "type": "number",
+          "description": "The cost per unit of AI usage (e.g., per token, per call)."
+        },
+        "unitsUsed": {
+          "type": "number",
+          "description": "The quantity of units consumed during this AI interaction."
+        },
+        "totalCost": {
+          "type": "number",
+          "description": "The total calculated cost for this specific AI usage event."
+        },
+        "userId": {
+          "type": "string",
+          "description": "Reference to the User who initiated the AI interaction. (Relationship: User 1:N AICostLog)"
+        },
+        "courseId": {
+          "type": "string",
+          "description": "Optional reference to the Course associated with the AI usage, if applicable. (Relationship: Course 1:N AICostLog)"
+        },
+        "departmentId": {
+          "type": "string",
+          "description": "Optional reference to the Department associated with the AI usage, if applicable. (Relationship: Department 1:N AICostLog)"
+        }
+      },
+      "required": [
+        "id",
+        "timestamp",
+        "serviceName",
+        "featureUsed",
+        "costPerUnit",
+        "unitsUsed",
+        "totalCost",
+        "userId"
+      ]
+    }
+  },
+  "auth": {
+    "providers": [
+      "password",
+      "anonymous"
+    ]
+  },
+  "firestore": {
+    "structure": [
+      {
+        "path": "/users/{userId}",
+        "definition": {
+          "entityName": "User",
+          "schema": {
+            "$ref": "#/backend/entities/User"
+          },
+          "description": "Stores user profiles. Each user can read/write their own profile data. The userId in the path corresponds to request.auth.uid. Includes role for DBAC."
+        }
+      },
+      {
+        "path": "/roles_admin/{adminId}",
+        "definition": {
+          "entityName": "User",
+          "schema": {
+            "$ref": "#/backend/entities/User"
+          },
+          "description": "Auxiliary collection for defining global administrators. Presence of a document signifies admin role. Used for existence checks in rules for admin-only access.",
+          "params": [
+            {
+              "name": "adminId",
+              "description": "The unique identifier of the user who has the administrator role."
+            }
+          ]
+        }
+      },
+      {
+        "path": "/departments/{departmentId}",
+        "definition": {
+          "entityName": "Department",
+          "schema": {
+            "$ref": "#/backend/entities/Department"
+          },
+          "description": "Stores academic department information. Globally readable by all users, but only administrators can create, update, or delete departments.",
+          "params": [
+            {
+              "name": "departmentId",
+              "description": "The unique identifier for the department."
+            }
+          ]
+        }
+      },
+      {
+        "path": "/courses/{courseId}",
+        "definition": {
+          "entityName": "Course",
+          "schema": {
+            "$ref": "#/backend/entities/Course"
+          },
+          "description": "Stores course details. Instructors (identified by resource.data.instructorId) can manage their courses. Students can read published courses if they are enrolled. Includes denormalized 'studentMembers' map for student read authorization.",
+          "params": [
+            {
+              "name": "courseId",
+              "description": "The unique identifier for the course."
+            }
+          ]
+        }
+      },
+      {
+        "path": "/enrollments/{enrollmentId}",
+        "definition": {
+          "entityName": "Enrollment",
+          "schema": {
+            "$ref": "#/backend/entities/Enrollment"
+          },
+          "description": "Records student enrollments in courses. A student can read their own enrollments. An instructor can read enrollments for their course. Includes denormalized 'courseInstructorId' for authorization independence and QAPs.",
+          "params": [
+            {
+              "name": "enrollmentId",
+              "description": "The unique identifier for the enrollment record."
+            }
+          ]
+        }
+      },
+      {
+        "path": "/courses/{courseId}/modules/{moduleId}",
+        "definition": {
+          "entityName": "Module",
+          "schema": {
+            "$ref": "#/backend/entities/Module"
+          },
+          "description": "Stores course modules. Instructors (resource.data.courseInstructorId) can manage. Students can read if course is published (resource.data.coursePublished) and they are in courseStudentMembers. Includes denormalized 'courseInstructorId', 'coursePublished', and 'courseStudentMembers' map for authorization independence.",
+          "params": [
+            {
+              "name": "courseId",
+              "description": "The unique identifier of the parent course."
+            },
+            {
+              "name": "moduleId",
+              "description": "The unique identifier for the module."
+            }
+          ]
+        }
+      },
+      {
+        "path": "/courses/{courseId}/modules/{moduleId}/contentItems/{contentItemId}",
+        "definition": {
+          "entityName": "ContentItem",
+          "schema": {
+            "$ref": "#/backend/entities/ContentItem"
+          },
+          "description": "Stores individual content items within modules. Inherits authorization from module/course. Includes denormalized 'courseInstructorId', 'coursePublished', and 'courseStudentMembers' map for authorization independence.",
+          "params": [
+            {
+              "name": "courseId",
+              "description": "The unique identifier of the parent course."
+            },
+            {
+              "name": "moduleId",
+              "description": "The unique identifier of the parent module."
+            },
+            {
+              "name": "contentItemId",
+              "description": "The unique identifier for the content item."
+            }
+          ]
+        }
+      },
+      {
+        "path": "/courses/{courseId}/learningObjectives/{objectiveId}",
+        "definition": {
+          "entityName": "LearningObjective",
+          "schema": {
+            "$ref": "#/backend/entities/LearningObjective"
+          },
+          "description": "Stores learning objectives for a course. Inherits authorization from course. Includes denormalized 'courseInstructorId', 'coursePublished', and 'courseStudentMembers' map for authorization independence.",
+          "params": [
+            {
+              "name": "courseId",
+              "description": "The unique identifier of the parent course."
+            },
+            {
+              "name": "objectiveId",
+              "description": "The unique identifier for the learning objective."
+            }
+          ]
+        }
+      },
+      {
+        "path": "/courses/{courseId}/modules/{moduleId}/assignments/{assignmentId}",
+        "definition": {
+          "entityName": "Assignment",
+          "schema": {
+            "$ref": "#/backend/entities/Assignment"
+          },
+          "description": "Stores assignment details within modules. Inherits authorization from module/course. Includes denormalized 'courseInstructorId', 'coursePublished', and 'courseStudentMembers' map for authorization independence.",
+          "params": [
+            {
+              "name": "courseId",
+              "description": "The unique identifier of the parent course."
+            },
+            {
+              "name": "moduleId",
+              "description": "The unique identifier of the parent module."
+            },
+            {
+              "name": "assignmentId",
+              "description": "The unique identifier for the assignment."
+            }
+          ]
+        }
+      },
+      {
+        "path": "/courses/{courseId}/modules/{moduleId}/assignments/{assignmentId}/rubric",
+        "definition": {
+          "entityName": "Rubric",
+          "schema": {
+            "$ref": "#/backend/entities/Rubric"
+          },
+          "description": "Stores the grading rubric for an assignment (singular document). Instructors can manage their rubric. Students can read approved rubrics if enrolled. Includes denormalized 'courseInstructorId', 'coursePublished', and 'courseStudentMembers' map for authorization independence.",
+          "params": [
+            {
+              "name": "courseId",
+              "description": "The unique identifier of the parent course."
+            },
+            {
+              "name": "moduleId",
+              "description": "The unique identifier of the parent module."
+            },
+            {
+              "name": "assignmentId",
+              "description": "The unique identifier of the parent assignment."
+            }
+          ]
+        }
+      },
+      {
+        "path": "/courses/{courseId}/modules/{moduleId}/assignments/{assignmentId}/rubric/criteria/{criterionId}",
+        "definition": {
+          "entityName": "RubricCriterion",
+          "schema": {
+            "$ref": "#/backend/entities/RubricCriterion"
+          },
+          "description": "Stores individual criteria for a rubric. Inherits authorization from its parent rubric. Includes denormalized 'courseInstructorId', 'coursePublished', 'courseStudentMembers', and 'rubricStatus' for authorization independence.",
+          "params": [
+            {
+              "name": "courseId",
+              "description": "The unique identifier of the grandparent course."
+            },
+            {
+              "name": "moduleId",
+              "description": "The unique identifier of the parent module."
+            },
+            {
+              "name": "assignmentId",
+              "description": "The unique identifier of the parent assignment."
+            },
+            {
+              "name": "criterionId",
+              "description": "The unique identifier for the rubric criterion."
+            }
+          ]
+        }
+      },
+      {
+        "path": "/courses/{courseId}/modules/{moduleId}/assignments/{assignmentId}/submissions/{submissionId}",
+        "definition": {
+          "entityName": "Submission",
+          "schema": {
+            "$ref": "#/backend/entities/Submission"
+          },
+          "description": "Stores student submissions for assignments. Students can read/write their own submissions. Instructors can read/grade all submissions for their course. Includes denormalized 'courseInstructorId', 'coursePublished', and 'submissionStudentId' for authorization independence.",
+          "params": [
+            {
+              "name": "courseId",
+              "description": "The unique identifier of the great-grandparent course."
+            },
+            {
+              "name": "moduleId",
+              "description": "The unique identifier of the grandparent module."
+            },
+            {
+              "name": "assignmentId",
+              "description": "The unique identifier of the parent assignment."
+            },
+            {
+              "name": "submissionId",
+              "description": "The unique identifier for the submission."
+            }
+          ]
+        }
+      },
+      {
+        "path": "/courses/{courseId}/modules/{moduleId}/assignments/{assignmentId}/submissions/{submissionId}/feedback/{feedbackId}",
+        "definition": {
+          "entityName": "Feedback",
+          "schema": {
+            "$ref": "#/backend/entities/Feedback"
+          },
+          "description": "Stores feedback for student submissions. Students can read feedback on their own submissions. Instructors can read/write feedback for submissions in their course. Includes denormalized 'courseInstructorId', 'coursePublished', and 'submissionStudentId' for authorization independence.",
+          "params": [
+            {
+              "name": "courseId",
+              "description": "The unique identifier of the great-great-grandparent course."
+            },
+            {
+              "name": "moduleId",
+              "description": "The unique identifier of the great-grandparent module."
+            },
+            {
+              "name": "assignmentId",
+              "description": "The unique identifier of the grandparent assignment."
+            },
+            {
+              "name": "submissionId",
+              "description": "The unique identifier of the parent submission."
+            },
+            {
+              "name": "feedbackId",
+              "description": "The unique identifier for the feedback item."
+            }
+          ]
+        }
+      },
+      {
+        "path": "/users/{studentId}/portfolio",
+        "definition": {
+          "entityName": "Portfolio",
+          "schema": {
+            "$ref": "#/backend/entities/Portfolio"
+          },
+          "description": "Stores a student's portfolio (singular document). Students (identified by studentId in path) can manage their own portfolio.",
+          "params": [
+            {
+              "name": "studentId",
+              "description": "The unique identifier of the student who owns the portfolio."
+            }
+          ]
+        }
+      },
+      {
+        "path": "/users/{studentId}/portfolio/items/{portfolioItemId}",
+        "definition": {
+          "entityName": "PortfolioItem",
+          "schema": {
+            "$ref": "#/backend/entities/PortfolioItem"
+          },
+          "description": "Stores individual items within a student's portfolio. Students (identified by studentId in path) can manage their own portfolio items.",
+          "params": [
+            {
+              "name": "studentId",
+              "description": "The unique identifier of the student who owns the portfolio."
+            },
+            {
+              "name": "portfolioItemId",
+              "description": "The unique identifier for the portfolio item."
+            }
+          ]
+        }
+      },
+      {
+        "path": "/aiCostLogs/{logId}",
+        "definition": {
+          "entityName": "AICostLog",
+          "schema": {
+            "$ref": "#/backend/entities/AICostLog"
+          },
+          "description": "Logs AI service usage and costs. Only administrators can read or write to this collection, facilitating admin cost management. Has a homogeneous security posture.",
+          "params": [
+            {
+              "name": "logId",
+              "description": "The unique identifier for the AI cost log entry."
+            }
+          ]
+        }
+      }
+    ],
+    "reasoning": "The Firestore data structure for VersoraAI is designed following the core principles of Authorization Independence, Structural Segregation, and consistent Access Modeling to ensure robust security, scalability, and debuggability. The primary strategy employed is extensive denormalization of authorization context, which is critical for eliminating slow and complex `get()` calls within security rules and enabling atomic operations.\n\n**Authorization Independence:** To achieve this, key authorization fields such as the `instructorId` and `published` status of a `Course`, and the `studentId` of a `Submission`, are denormalized into every related sub-document. For example, a `Module` document (nested under a Course) will contain `courseInstructorId`, `coursePublished`, and `courseStudentMembers` (a map of enrolled student UIDs). This ensures that any security rule for a `Module` document can determine access rights (e.g., if the user is the instructor, if the course is published, or if the user is an enrolled student) by only inspecting the fields of the `Module` document itself, without needing to perform a `get()` on its parent `Course` document. This dramatically simplifies security rules and prevents cascading permission failures.\n\n**Structural Segregation & QAPs (Queries as Policy):**\n\n1.  **Users and Departments:** Top-level collections (`/users`, `/departments`) serve as foundational data. User profiles are private to their owners (`/users/{userId}`), while departments are globally readable but admin-manageable.\n2.  **Global Roles:** A dedicated collection `/roles_admin/{adminId}` is used for global administrator role checks, employing an `exists()` rule, which is a standard and efficient DBAC pattern.\n3.  **Course Management & Content:** The hierarchical structure `/courses/{courseId}/modules/{moduleId}/contentItems/{contentItemId}` is used for course content. This naturally groups related content. For `list` operations (QAPs):\n    *   **Instructors** can list all content within *their* courses directly by querying within their `courseId` path, as `courseInstructorId` is denormalized in each document.\n    *   **Students** access courses via the `/enrollments` collection. A student can query `/enrollments` where `studentId == request.auth.uid` to get a list of `courseId`s they are enrolled in. Then, for viewing course content (modules, assignments, etc.), security rules for these documents allow access if `coursePublished == true` AND `request.auth.uid` is present in the document's denormalized `courseStudentMembers` map. This enables students to list course content effectively without `get()` calls in rules.\n4.  **Enrollments:** Stored in a top-level `/enrollments/{enrollmentId}` collection, denormalizing `courseInstructorId`. This allows efficient `list` operations for students to see 'My Courses' (query by `studentId`) and for instructors to see enrollments for 'Their Courses' (query by `courseInstructorId`), satisfying QAPs for both user types.\n5.  **Submissions & Feedback:** Nested within assignments (`/courses/{courseId}/modules/{moduleId}/assignments/{assignmentId}/submissions/{submissionId}`). These documents also denormalize `courseInstructorId` and `submissionStudentId`. This allows students to list *their* submissions/feedback and instructors to list submissions/feedback for *their* assignments, again supporting QAPs and Authorization Independence.\n6.  **Portfolios:** Private to the student and structured hierarchically under the user: `/users/{studentId}/portfolio/items/{portfolioItemId}`. This inherently enforces ownership via path-based rules.\n7.  **AI Cost Logs:** A top-level `/aiCostLogs/{logId}` collection stores administrative cost data. Its homogeneous security posture (admin-only access) simplifies rules, relying on the `/roles_admin` check.\n\nThis design prioritizes placing authorization data directly on the document being accessed, enabling simple, robust, and easily debuggable security rules while supporting common `list` query patterns for students and instructors."
+  }
+}
