@@ -321,9 +321,11 @@ function SubmissionsList({ courseId, moduleId, assignmentId }: { courseId: strin
                     </Badge>
                   </TableCell>
                   <TableCell className="text-right">
-                    <Button variant="outline" size="sm">
-                      <Eye className="mr-2 h-3 w-3" />
-                      View & Grade
+                    <Button asChild variant="outline" size="sm">
+                      <Link href={`/instructor/course/${courseId}/module/${moduleId}/assignment/${assignmentId}/grade/${submission.id}`}>
+                        <Eye className="mr-2 h-3 w-3" />
+                        View &amp; Grade
+                      </Link>
                     </Button>
                   </TableCell>
                 </TableRow>
@@ -524,5 +526,3 @@ export default function AssignmentEditPage({ params }: { params: { courseId: str
     </div>
   );
 }
-
-    
