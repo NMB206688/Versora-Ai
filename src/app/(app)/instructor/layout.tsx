@@ -10,29 +10,33 @@ export default function InstructorLayout({
 }: {
   children: React.ReactNode;
 }) {
-  const { user, isUserLoading } = useUser();
+  const { user, profile, isUserLoading } = useUser();
   const router = useRouter();
 
   useEffect(() => {
-    if (!isUserLoading && !user) {
-      router.push('/login');
+    if (!isUserLoading) {
+      if (!user) {
+        router.push('/login');
+      } else if (profile && profile.role !== 'instructor') {
+        // If logged in but not an instructor, redirect to their correct dashboard
+        router.push(`/${profile.role}/dashboard`);
+      }
     }
-  }, [user, isUserLoading, router]);
+  }, [user, profile, isUserLoading, router]);
 
-  if (isUserLoading || !user) {
-    // You can show a loading spinner here
+  // Show a loading state while we verify the user and their role
+  if (isUserLoading || !profile) {
     return <div>Loading...</div>;
   }
 
-  // A mock user for display purposes until we fetch roles from Firestore
+  // Construct the user object for the header
   const displayUser = {
       id: user.uid,
-      name: user.displayName || user.email || 'Instructor',
+      name: profile.firstName ? `${profile.firstName} ${profile.lastName}`.trim() : user.email,
       email: user.email || '',
-      role: 'instructor', // This will be dynamic later
-      avatarUrl: user.photoURL || ''
+      role: profile.role, // Use the real role from the profile
+      avatarUrl: profile.avatarUrl || user.photoURL || ''
   }
-
 
   return (
     <div className="flex min-h-screen w-full flex-col">

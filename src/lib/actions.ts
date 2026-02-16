@@ -11,15 +11,13 @@ import {
   sendPasswordResetEmail,
   type Auth,
 } from 'firebase/auth';
+import { getFirestore, doc, setDoc } from 'firebase/firestore';
 import { initializeApp, getApps, getApp, type FirebaseApp } from 'firebase/app';
 import { firebaseConfig } from '@/firebase/config';
 
-// Server-side Firebase initialization.
-function getFirebaseAuth(): Auth {
+// Server-side Firebase initialization for both Auth and Firestore.
+function getFirebaseServerServices() {
   if (getApps().length === 0) {
-    // This logic is specific to Firebase App Hosting.
-    // It tries to initialize without a config, which App Hosting provides.
-    // In other environments, it falls back to the provided firebaseConfig.
     try {
       initializeApp();
     } catch (e) {
@@ -32,8 +30,11 @@ function getFirebaseAuth(): Auth {
       initializeApp(firebaseConfig);
     }
   }
-  // Get the Auth instance for the already-initialized app.
-  return getAuth(getApp());
+  const app = getApp();
+  return {
+    auth: getAuth(app),
+    firestore: getFirestore(app),
+  };
 }
 
 // Existing authenticate action
@@ -41,18 +42,16 @@ export async function authenticate(
   prevState: string | undefined,
   formData: FormData,
 ) {
-  const auth = getFirebaseAuth();
+  const { auth } = getFirebaseServerServices();
   try {
     const email = formData.get('email') as string;
     const password = formData.get('password') as string;
 
-    await signInWithEmailAndPassword(auth, email, password);
-
-    // This part of the logic will be handled by a client-side redirect based on the user's role
-    // For now, we redirect to a generic dashboard.
-    // In the future, we will fetch the user's role from Firestore.
-    redirect(`/student/dashboard`);
-
+    const userCredential = await signInWithEmailAndPassword(auth, email, password);
+    
+    // The client-side will handle redirection based on the user's role fetched from Firestore.
+    // We just need to signal success. The onAuthStateChanged listener will trigger the profile fetch.
+    
   } catch (error: any) {
     if (error.message.includes('NEXT_REDIRECT')) {
       throw error;
@@ -61,6 +60,7 @@ export async function authenticate(
         switch (error.code) {
             case 'auth/user-not-found':
             case 'auth/wrong-password':
+            case 'auth/invalid-credential':
                 return { message: 'Invalid credentials.' };
             case 'auth/invalid-email':
                 return { message: 'Invalid email address.' };
@@ -73,6 +73,7 @@ export async function authenticate(
       message: 'Something went wrong.',
     };
   }
+  // Redirect is handled client-side by the Home page component after state change
 }
 
 // Signup Action
@@ -80,7 +81,7 @@ const SignupFormSchema = z.object({
   name: z.string().min(2, { message: "Name must be at least 2 characters." }),
   email: z.string().email({ message: "Please enter a valid email address." }),
   password: z.string().min(6, { message: "Password must be at least 6 characters." }),
-  role: z.enum(["student", "instructor"]),
+  role: z.enum(["student", "instructor"], { required_error: "You need to select a role." }),
 });
 
 export async function signup(prevState: any, formData: FormData) {
@@ -100,13 +101,27 @@ export async function signup(prevState: any, formData: FormData) {
   }
 
   const { name, email, password, role } = validatedFields.data;
-  const auth = getFirebaseAuth();
+  const { auth, firestore } = getFirebaseServerServices();
 
   try {
     const userCredential = await createUserWithEmailAndPassword(auth, email, password);
     const user = userCredential.user;
 
-    // TODO: Save user role and other details in Firestore
+    const nameParts = name.trim().split(' ');
+    const firstName = nameParts[0] || '';
+    const lastName = nameParts.slice(1).join(' ') || '';
+
+    // Create user profile document in Firestore
+    const userDocRef = doc(firestore, 'users', user.uid);
+    await setDoc(userDocRef, {
+      id: user.uid,
+      email: user.email,
+      firstName: firstName,
+      lastName: lastName,
+      role: role,
+      creationDate: new Date().toISOString(),
+      lastLoginDate: new Date().toISOString(),
+    });
     
     return {
       message: 'Account created successfully! You can now sign in.',
@@ -147,7 +162,7 @@ export async function requestPasswordReset(prevState: any, formData: FormData) {
   }
   
   const { email } = validatedFields.data;
-  const auth = getFirebaseAuth();
+  const { auth } = getFirebaseServerServices();
 
   try {
     await sendPasswordResetEmail(auth, email);

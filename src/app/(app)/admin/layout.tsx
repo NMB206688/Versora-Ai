@@ -10,28 +10,32 @@ export default function AdminLayout({
 }: {
   children: React.ReactNode;
 }) {
-  const { user, isUserLoading } = useUser();
+  const { user, profile, isUserLoading } = useUser();
   const router = useRouter();
 
   useEffect(() => {
-    if (!isUserLoading && !user) {
-      router.push('/login');
+    if (!isUserLoading) {
+      if (!user) {
+        router.push('/login');
+      } else if (profile && profile.role !== 'admin') {
+        // If logged in but not an admin, redirect to their correct dashboard
+        router.push(`/${profile.role}/dashboard`);
+      }
     }
-  }, [user, isUserLoading, router]);
+  }, [user, profile, isUserLoading, router]);
 
-
-  if (isUserLoading || !user) {
-    // Or redirect to login
+  // Show a loading state while we verify the user and their role
+  if (isUserLoading || !profile) {
     return <div>Loading...</div>;
   }
-  
-  // A mock user for display purposes until we fetch roles from Firestore
+
+  // Construct the user object for the header
   const displayUser = {
       id: user.uid,
-      name: user.displayName || user.email || 'Admin',
+      name: profile.firstName ? `${profile.firstName} ${profile.lastName}`.trim() : user.email,
       email: user.email || '',
-      role: 'admin', // This will be dynamic later
-      avatarUrl: user.photoURL || ''
+      role: profile.role, // Use the real role from the profile
+      avatarUrl: profile.avatarUrl || user.photoURL || ''
   }
 
   return (
