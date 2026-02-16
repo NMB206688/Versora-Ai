@@ -428,3 +428,48 @@ export async function createAssignment(courseId: string, moduleId: string) {
     return { error: "An unexpected error occurred while creating the assignment." };
   }
 }
+
+const UpdateAssignmentSchema = z.object({
+  title: z.string().min(1, "Title is required."),
+  description: z.string().min(1, "Description is required."),
+  pointsPossible: z.coerce.number().min(0, "Points must be a positive number."),
+  deadline: z.string().refine((val) => !isNaN(Date.parse(val)), { message: "Invalid date" }),
+});
+
+export async function updateAssignment(
+    courseId: string,
+    moduleId: string,
+    assignmentId: string,
+    prevState: any,
+    formData: FormData
+) {
+    const validatedFields = UpdateAssignmentSchema.safeParse({
+        title: formData.get('title'),
+        description: formData.get('description'),
+        pointsPossible: formData.get('pointsPossible'),
+        deadline: formData.get('deadline'),
+    });
+
+    if (!validatedFields.success) {
+        return {
+            errors: validatedFields.error.flatten().fieldErrors,
+            message: 'Failed to update assignment. Please check the fields.',
+        };
+    }
+
+    const { firestore } = getFirebaseServerServices();
+    const assignmentRef = doc(firestore, 'courses', courseId, 'modules', moduleId, 'assignments', assignmentId);
+
+    try {
+        await updateDoc(assignmentRef, {
+            ...validatedFields.data,
+            deadline: new Date(validatedFields.data.deadline).toISOString(), // ensure it's ISO string
+        });
+        revalidatePath(`/instructor/course/${courseId}/module/${moduleId}/assignment/${assignmentId}`);
+        revalidatePath(`/instructor/course/${courseId}/edit`);
+        return { message: 'Assignment updated successfully.', errors: {} };
+    } catch (error) {
+        console.error('Failed to update assignment:', error);
+        return { message: 'An unexpected error occurred while updating the assignment.' };
+    }
+}

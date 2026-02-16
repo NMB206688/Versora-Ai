@@ -5,6 +5,7 @@ import { useFormStatus } from 'react-dom';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
+import Link from 'next/link';
 import {
   SidebarProvider,
   Sidebar,
@@ -206,13 +207,13 @@ function AssignmentsList({ courseId, moduleId }: { courseId: string; moduleId: s
       )}
       {assignments?.map((item) => (
         <li key={item.id} className="w-full">
-          <a
-            href="#"
+          <Link
+            href={`/instructor/course/${courseId}/module/${moduleId}/assignment/${item.id}`}
             className="flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground p-2 rounded-md"
           >
             <ClipboardEdit className="h-4 w-4" />
             <span>{item.title}</span>
-          </a>
+          </Link>
         </li>
       ))}
        <li className="w-full mt-2">
@@ -418,5 +419,3 @@ export default function CourseEditPage({ params }: { params: { id: string } }) {
     </SidebarProvider>
   );
 }
-
-    
