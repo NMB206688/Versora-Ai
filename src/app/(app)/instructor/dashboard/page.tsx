@@ -2,6 +2,7 @@
 
 import Link from 'next/link';
 import Image from 'next/image';
+import { useActionState, useFormStatus } from 'react';
 import {
   Card,
   CardContent,
@@ -15,9 +16,20 @@ import { ArrowRight, PlusCircle, Users, ClipboardCheck } from 'lucide-react';
 import { useUser, useFirestore, useCollection, useMemoFirebase } from '@/firebase';
 import { collection, query, where } from 'firebase/firestore';
 import { Skeleton } from '@/components/ui/skeleton';
+import { createCourse } from '@/lib/actions';
+
+function CreateCourseButton() {
+  const { pending } = useFormStatus();
+  return (
+    <Button type="submit" disabled={pending} className="bg-accent hover:bg-accent/90 text-accent-foreground">
+      <PlusCircle className="mr-2 h-4 w-4" />
+      {pending ? 'Creating...' : 'Create New Course'}
+    </Button>
+  );
+}
 
 export default function InstructorDashboard() {
-  const { user } = useUser();
+  const { user, profile } = useUser();
   const firestore = useFirestore();
 
   const coursesQuery = useMemoFirebase(() => {
@@ -26,6 +38,8 @@ export default function InstructorDashboard() {
   }, [user, firestore]);
 
   const { data: instructorCourses, isLoading } = useCollection(coursesQuery);
+  
+  const [state, formAction] = useActionState(createCourse, undefined);
 
   return (
     <div className="container mx-auto">
@@ -40,14 +54,19 @@ export default function InstructorDashboard() {
                     AI Rubric Generator
                 </Link>
             </Button>
-            <Button asChild className="bg-accent hover:bg-accent/90 text-accent-foreground">
-                <Link href="/instructor/course/new/edit">
-                    <PlusCircle className="mr-2 h-4 w-4" />
-                    Create New Course
-                </Link>
-            </Button>
+            <form action={formAction}>
+              {user && profile && (
+                <>
+                  <input type="hidden" name="instructorId" value={user.uid} />
+                  <input type="hidden" name="instructorName" value={`${profile.firstName} ${profile.lastName}`.trim()} />
+                </>
+              )}
+              <CreateCourseButton />
+            </form>
         </div>
       </div>
+
+      {state?.message && <p className="text-destructive mb-4">{state.message}</p>}
 
       <div className="grid gap-6">
         <Card className="shadow-lg">

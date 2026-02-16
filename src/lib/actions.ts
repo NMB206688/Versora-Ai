@@ -11,9 +11,10 @@ import {
   sendPasswordResetEmail,
   type Auth,
 } from 'firebase/auth';
-import { getFirestore, doc, setDoc } from 'firebase/firestore';
+import { getFirestore, doc, setDoc, collection, addDoc } from 'firebase/firestore';
 import { initializeApp, getApps, getApp, type FirebaseApp } from 'firebase/app';
 import { firebaseConfig } from '@/firebase/config';
+import { PlaceHolderImages } from './placeholder-images';
 
 // Server-side Firebase initialization for both Auth and Firestore.
 function getFirebaseServerServices() {
@@ -234,4 +235,40 @@ export async function createRubric(prevState: any, formData: FormData) {
         console.error(e);
         return { rubric: "Failed to generate rubric. Please try again.", errors: {} };
     }
+}
+
+export async function createCourse(prevState: any, formData: FormData) {
+  const { firestore } = getFirebaseServerServices();
+  const instructorId = formData.get('instructorId') as string;
+  const instructorName = formData.get('instructorName') as string;
+
+  if (!instructorId || !instructorName) {
+    return { message: 'You must be logged in to create a course.' };
+  }
+
+  // Select a random image from placeholders, excluding the user avatar
+  const courseImages = PlaceHolderImages.filter(img => img.id.startsWith('course-'));
+  const randomImage = courseImages[Math.floor(Math.random() * courseImages.length)];
+
+  try {
+    const newCourseRef = await addDoc(collection(firestore, 'courses'), {
+      title: 'Untitled Course',
+      description: 'Start building your course by adding a description and content.',
+      instructorId: instructorId,
+      instructorName: instructorName,
+      departmentId: '', // Default value
+      published: false,
+      creationDate: new Date().toISOString(),
+      imageUrl: randomImage.imageUrl,
+      imageHint: randomImage.imageHint,
+    });
+    
+    // Redirect to the edit page for the newly created course
+    redirect(`/instructor/course/${newCourseRef.id}/edit`);
+
+  } catch (error) {
+    console.error('Failed to create course:', error);
+    // This message will be returned to the client if redirect fails
+    return { message: 'An unexpected error occurred while creating the course. Please try again.' };
+  }
 }
