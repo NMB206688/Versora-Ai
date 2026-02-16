@@ -93,6 +93,10 @@
           "type": "string",
           "description": "Reference to the User acting as the primary instructor for this course. (Relationship: User 1:N Course)"
         },
+        "instructorName": {
+          "type": "string",
+          "description": "The display name of the course instructor."
+        },
         "departmentId": {
           "type": "string",
           "description": "Reference to the Department this course belongs to. (Relationship: Department 1:N Course)"
@@ -105,6 +109,15 @@
           "type": "string",
           "description": "Timestamp when the course was created.",
           "format": "date-time"
+        },
+        "imageUrl": {
+          "type": "string",
+          "format": "uri",
+          "description": "URL for the course image."
+        },
+        "imageHint": {
+          "type": "string",
+          "description": "A hint for AI image generation or search."
         }
       },
       "required": [
@@ -112,9 +125,12 @@
         "title",
         "description",
         "instructorId",
+        "instructorName",
         "departmentId",
         "published",
-        "creationDate"
+        "creationDate",
+        "imageUrl",
+        "imageHint"
       ]
     },
     "Enrollment": {

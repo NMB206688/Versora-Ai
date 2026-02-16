@@ -1,3 +1,5 @@
+'use client';
+
 import Link from 'next/link';
 import Image from 'next/image';
 import {
@@ -9,12 +11,21 @@ import {
   CardTitle,
 } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
-import { courses } from '@/lib/data';
 import { ArrowRight, PlusCircle, Users, ClipboardCheck } from 'lucide-react';
+import { useUser, useFirestore, useCollection, useMemoFirebase } from '@/firebase';
+import { collection, query, where } from 'firebase/firestore';
+import { Skeleton } from '@/components/ui/skeleton';
 
 export default function InstructorDashboard() {
-  const instructorCourses = courses.filter(c => c.instructor === 'Dr. Emily Carter');
+  const { user } = useUser();
+  const firestore = useFirestore();
+
+  const coursesQuery = useMemoFirebase(() => {
+    if (!user || !firestore) return null;
+    return query(collection(firestore, 'courses'), where('instructorId', '==', user.uid));
+  }, [user, firestore]);
+
+  const { data: instructorCourses, isLoading } = useCollection(coursesQuery);
 
   return (
     <div className="container mx-auto">
@@ -45,37 +56,63 @@ export default function InstructorDashboard() {
             <CardDescription>Manage your course content and view student progress.</CardDescription>
           </CardHeader>
           <CardContent>
-            <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-              {instructorCourses.map((course) => (
-                <Card key={course.id} className="overflow-hidden transition-shadow hover:shadow-xl">
-                  <CardHeader className="p-0">
-                    <div className="relative w-full h-40">
-                      <Image
-                        src={course.imageUrl}
-                        alt={course.title}
-                        fill
-                        style={{ objectFit: 'cover' }}
-                        data-ai-hint={course.imageHint}
-                      />
-                    </div>
-                  </CardHeader>
-                  <CardContent className="p-4">
-                    <CardTitle className="font-headline text-lg mb-2">{course.title}</CardTitle>
-                    <div className="flex items-center text-sm text-muted-foreground">
-                        <Users className="mr-2 h-4 w-4" />
-                        <span>34 students</span>
-                    </div>
-                  </CardContent>
-                  <CardFooter className="p-4 pt-0">
-                    <Button asChild className="w-full">
-                      <Link href={`/instructor/course/${course.id}/edit`}>
-                        Manage Course <ArrowRight className="ml-2 h-4 w-4" />
-                      </Link>
+            {isLoading && (
+              <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+                {[...Array(3)].map((_, i) => (
+                  <Card key={i} className="overflow-hidden">
+                    <Skeleton className="w-full h-40" />
+                    <CardContent className="p-4">
+                      <Skeleton className="h-5 w-3/4 mb-2" />
+                      <Skeleton className="h-4 w-1/2" />
+                    </CardContent>
+                    <CardFooter className="p-4 pt-0">
+                      <Skeleton className="h-10 w-full" />
+                    </CardFooter>
+                  </Card>
+                ))}
+              </div>
+            )}
+            {!isLoading && instructorCourses && instructorCourses.length > 0 && (
+              <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+                {instructorCourses.map((course) => (
+                  <Card key={course.id} className="overflow-hidden transition-shadow hover:shadow-xl">
+                    <CardHeader className="p-0">
+                      <div className="relative w-full h-40">
+                        <Image
+                          src={course.imageUrl}
+                          alt={course.title}
+                          fill
+                          style={{ objectFit: 'cover' }}
+                          data-ai-hint={course.imageHint}
+                        />
+                      </div>
+                    </CardHeader>
+                    <CardContent className="p-4">
+                      <CardTitle className="font-headline text-lg mb-2">{course.title}</CardTitle>
+                      <div className="flex items-center text-sm text-muted-foreground">
+                          <Users className="mr-2 h-4 w-4" />
+                          <span>34 students</span>
+                      </div>
+                    </CardContent>
+                    <CardFooter className="p-4 pt-0">
+                      <Button asChild className="w-full">
+                        <Link href={`/instructor/course/${course.id}/edit`}>
+                          Manage Course <ArrowRight className="ml-2 h-4 w-4" />
+                        </Link>
+                      </Button>
+                    </CardFooter>
+                  </Card>
+                ))}
+              </div>
+            )}
+            {!isLoading && (!instructorCourses || instructorCourses.length === 0) && (
+                <div className="text-center text-muted-foreground py-12">
+                    <p>You haven't created any courses yet.</p>
+                    <Button asChild className="mt-4">
+                        <Link href="/instructor/course/new/edit">Create Your First Course</Link>
                     </Button>
-                  </CardFooter>
-                </Card>
-              ))}
-            </div>
+                </div>
+            )}
           </CardContent>
         </Card>
 
